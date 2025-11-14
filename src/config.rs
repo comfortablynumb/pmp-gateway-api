@@ -127,6 +127,23 @@ pub struct RouteConfig {
     /// Optional response transformation
     #[serde(default)]
     pub response_transform: Option<ResponseTransform>,
+    /// Execution mode: sequential or parallel (default: parallel)
+    #[serde(default = "default_execution_mode")]
+    pub execution_mode: ExecutionMode,
+}
+
+/// Execution mode for subrequests
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ExecutionMode {
+    /// Execute all subrequests in parallel
+    Parallel,
+    /// Execute subrequests sequentially
+    Sequential,
+}
+
+fn default_execution_mode() -> ExecutionMode {
+    ExecutionMode::Parallel
 }
 
 /// Response transformation configuration
@@ -152,11 +169,17 @@ pub struct ResponseTransform {
 /// Subrequest configuration
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct SubrequestConfig {
+    /// Optional name for this subrequest (used for referencing results)
+    #[serde(default)]
+    pub name: Option<String>,
     /// Reference to a client ID
     pub client_id: String,
     /// Optional condition for executing this subrequest
     #[serde(default)]
     pub condition: Option<Condition>,
+    /// List of subrequest names this depends on (for sequential execution)
+    #[serde(default)]
+    pub depends_on: Vec<String>,
     /// Subrequest-specific configuration based on client type
     #[serde(flatten)]
     pub config: SubrequestTypeConfig,

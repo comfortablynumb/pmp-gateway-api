@@ -1,5 +1,6 @@
 use axum::http::{HeaderMap, Method};
 use regex::Regex;
+use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
@@ -19,6 +20,8 @@ pub struct InterpolationContext {
     pub query_params: HashMap<String, String>,
     pub body: Option<String>,
     pub method: Method,
+    /// Results from previously executed subrequests (name -> result JSON)
+    pub subrequest_results: HashMap<String, Value>,
 }
 
 impl InterpolationContext {
@@ -35,7 +38,13 @@ impl InterpolationContext {
             query_params,
             body,
             method,
+            subrequest_results: HashMap::new(),
         }
+    }
+
+    /// Add a subrequest result to the context
+    pub fn add_subrequest_result(&mut self, name: String, result: Value) {
+        self.subrequest_results.insert(name, result);
     }
 
     /// Interpolate a template string with request data
@@ -45,6 +54,7 @@ impl InterpolationContext {
     /// - ${request.query.param_name}
     /// - ${request.body}
     /// - ${request.method}
+    /// - ${subrequest.name.field.path} (access previous subrequest results)
     pub fn interpolate(&self, template: &str) -> String {
         let regex = get_interpolation_regex();
 
@@ -95,8 +105,60 @@ impl InterpolationContext {
             return self.method.as_str().to_string();
         }
 
+        // Handle subrequest.name.path (access previous subrequest results)
+        if let Some(subreq_expr) = expr.strip_prefix("subrequest.") {
+            return self.extract_subrequest_value(subreq_expr);
+        }
+
         // If no match, return the original expression
         format!("${{{}}}", expr)
+    }
+
+    /// Extract a value from a subrequest result using dot notation
+    /// Examples: "user_request.body.id", "api_call.status"
+    fn extract_subrequest_value(&self, path: &str) -> String {
+        let parts: Vec<&str> = path.split('.').collect();
+        if parts.is_empty() {
+            return String::new();
+        }
+
+        // First part is the subrequest name
+        let subreq_name = parts[0];
+
+        if let Some(result) = self.subrequest_results.get(subreq_name) {
+            if parts.len() == 1 {
+                // Return the whole result as JSON string
+                return serde_json::to_string(result).unwrap_or_default();
+            }
+
+            // Navigate through the JSON path
+            let mut current = result.clone();
+            for part in &parts[1..] {
+                current = match current {
+                    Value::Object(map) => map.get(*part).cloned().unwrap_or(Value::Null),
+                    Value::Array(arr) => {
+                        // Try to parse as array index
+                        if let Ok(index) = part.parse::<usize>() {
+                            arr.get(index).cloned().unwrap_or(Value::Null)
+                        } else {
+                            Value::Null
+                        }
+                    }
+                    _ => Value::Null,
+                };
+            }
+
+            // Convert the final value to string
+            match current {
+                Value::String(s) => s,
+                Value::Number(n) => n.to_string(),
+                Value::Bool(b) => b.to_string(),
+                Value::Null => String::new(),
+                _ => serde_json::to_string(&current).unwrap_or_default(),
+            }
+        } else {
+            String::new()
+        }
     }
 }
 

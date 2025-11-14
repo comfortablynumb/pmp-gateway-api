@@ -1,0 +1,280 @@
+# Sequential and Parallel Execution Examples for PMP Gateway API
+# This file demonstrates:
+# - Sequential vs Parallel execution modes
+# - Named subrequests for data extraction
+# - Dependency tracking with depends_on
+# - Using ${subrequest.name.field.path} to access previous results
+
+clients:
+  users_api:
+    type: http
+    base_url: "https://jsonplaceholder.typicode.com"
+    headers:
+      User-Agent: "PMP-Gateway/1.0"
+    min_connections: 2
+    max_connections: 20
+    timeout: 30
+
+  posts_api:
+    type: http
+    base_url: "https://jsonplaceholder.typicode.com"
+    headers:
+      User-Agent: "PMP-Gateway/1.0"
+    min_connections: 2
+    max_connections: 20
+    timeout: 30
+
+  users_db:
+    type: postgres
+    connection_string: "postgres://user:password@localhost:5432/mydb"
+    max_connections: 10
+    timeout: 30
+
+  session_cache:
+    type: redis
+    connection_string: "redis://localhost:6379"
+    timeout: 10
+
+routes:
+  # Example 1: Sequential execution with data dependencies
+  # Each subrequest can access data from previous named subrequests
+  - method: GET
+    path: /user-with-posts/:id
+    execution_mode: sequential  # Execute one after another
+    subrequests:
+      # First: Get user data
+      - name: user_data
+        client_id: users_api
+        type: http
+        uri: /users/${request.path.id}
+        method: GET
+
+      # Second: Use user data to get their posts
+      # Access previous result with ${subrequest.user_data.body.id}
+      - name: user_posts
+        client_id: posts_api
+        type: http
+        uri: /posts
+        method: GET
+        query_params:
+          # Extract user ID from previous subrequest result
+          userId: "${subrequest.user_data.body.id}"
+
+      # Third: Cache the user data
+      - name: cache_user
+        client_id: session_cache
+        type: redis
+        operation:
+          op: set
+          # Use data from first subrequest
+          key: "user:${subrequest.user_data.body.id}"
+          value: "${subrequest.user_data.body}"
+          expiration: 3600
+
+  # Example 2: Parallel execution (default)
+  # All subrequests execute simultaneously
+  - method: GET
+    path: /dashboard/:user_id
+    execution_mode: parallel  # Default: all execute at once
+    subrequests:
+      # These all run in parallel since they don't depend on each other
+      - name: user_profile
+        client_id: users_api
+        type: http
+        uri: /users/${request.path.user_id}
+        method: GET
+
+      - name: user_posts
+        client_id: posts_api
+        type: http
+        uri: /posts
+        method: GET
+        query_params:
+          userId: "${request.path.user_id}"
+
+      - name: cached_data
+        client_id: session_cache
+        type: redis
+        operation:
+          op: get
+          key: "user:${request.path.user_id}:stats"
+
+  # Example 3: Parallel with explicit dependencies
+  # Even in parallel mode, use depends_on to create execution waves
+  - method: GET
+    path: /enriched-user/:id
+    execution_mode: parallel
+    subrequests:
+      # Wave 1: These run first (no dependencies)
+      - name: user_data
+        client_id: users_api
+        type: http
+        uri: /users/${request.path.id}
+        method: GET
+
+      # Wave 2: This waits for user_data to complete
+      - name: user_posts
+        client_id: posts_api
+        type: http
+        uri: /posts
+        method: GET
+        query_params:
+          userId: "${subrequest.user_data.body.id}"
+        depends_on:
+          - user_data
+
+      # Wave 2: This also waits for user_data (runs in parallel with user_posts)
+      - name: user_todos
+        client_id: users_api
+        type: http
+        uri: /todos
+        method: GET
+        query_params:
+          userId: "${subrequest.user_data.body.id}"
+        depends_on:
+          - user_data
+
+  # Example 4: Complex sequential workflow with database
+  - method: POST
+    path: /create-user-workflow
+    execution_mode: sequential
+    subrequests:
+      # Step 1: Create user in database
+      - name: create_user
+        client_id: users_db
+        type: postgres
+        query: "INSERT INTO users (name, email) VALUES ($1, $2) RETURNING id, name, email"
+        params:
+          - "${request.body}"  # Assuming JSON body
+          - "${request.body}"
+
+      # Step 2: Cache new user
+      - name: cache_new_user
+        client_id: session_cache
+        type: redis
+        operation:
+          op: set
+          # Access the ID from database insert result
+          key: "user:${subrequest.create_user.rows.0.id}"
+          value: "${subrequest.create_user.rows.0}"
+          expiration: 3600
+
+      # Step 3: Send welcome notification (hypothetical)
+      - name: send_welcome
+        client_id: users_api
+        type: http
+        uri: /notifications
+        method: POST
+        headers:
+          Content-Type: "application/json"
+        body: '{"user_id": "${subrequest.create_user.rows.0.id}", "type": "welcome"}'
+
+  # Example 5: Mixed dependencies with conditional execution
+  - method: GET
+    path: /smart-fetch/:user_id
+    execution_mode: parallel
+    subrequests:
+      # Try cache first
+      - name: check_cache
+        client_id: session_cache
+        type: redis
+        operation:
+          op: get
+          key: "user:${request.path.user_id}"
+
+      # Fetch from API if needed (could add condition based on cache result)
+      - name: fetch_from_api
+        client_id: users_api
+        type: http
+        uri: /users/${request.path.user_id}
+        method: GET
+        # This will execute regardless, but in a real scenario,
+        # you might want to add a condition
+
+      # Update cache with fresh data
+      - name: update_cache
+        client_id: session_cache
+        type: redis
+        operation:
+          op: set
+          key: "user:${request.path.user_id}"
+          value: "${subrequest.fetch_from_api.body}"
+          expiration: 3600
+        depends_on:
+          - fetch_from_api
+
+  # Example 6: Accessing nested subrequest data
+  - method: GET
+    path: /user-email/:id
+    execution_mode: sequential
+    subrequests:
+      # Get user data
+      - name: user
+        client_id: users_api
+        type: http
+        uri: /users/${request.path.id}
+        method: GET
+
+      # Access nested fields from previous result
+      - name: send_email
+        client_id: users_api
+        type: http
+        uri: /send-email
+        method: POST
+        headers:
+          Content-Type: "application/json"
+        body: |
+          {
+            "to": "${subrequest.user.body.email}",
+            "subject": "Hello ${subrequest.user.body.name}",
+            "user_id": ${subrequest.user.body.id}
+          }
+
+  # Example 7: Array access in subrequest results
+  - method: GET
+    path: /first-post/:user_id
+    execution_mode: sequential
+    subrequests:
+      # Get all posts
+      - name: all_posts
+        client_id: posts_api
+        type: http
+        uri: /posts
+        method: GET
+        query_params:
+          userId: "${request.path.user_id}"
+
+      # Access first post from array
+      - name: post_details
+        client_id: posts_api
+        type: http
+        uri: /posts/${subrequest.all_posts.body.0.id}
+        method: GET
+
+  # Example 8: Response transformation with sequential execution
+  - method: GET
+    path: /user-summary/:id
+    execution_mode: sequential
+    subrequests:
+      - name: user
+        client_id: users_api
+        type: http
+        uri: /users/${request.path.id}
+        method: GET
+
+      - name: posts
+        client_id: posts_api
+        type: http
+        uri: /posts
+        method: GET
+        query_params:
+          userId: "${subrequest.user.body.id}"
+
+    # Transform the response to extract specific data
+    response_transform:
+      template: |
+        {
+          "user_name": "${subrequest.user.body.name}",
+          "user_email": "${subrequest.user.body.email}",
+          "post_count": ${subrequest.posts.body}
+        }
