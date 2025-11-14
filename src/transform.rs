@@ -1,6 +1,6 @@
 use crate::config::ResponseTransform;
 use crate::interpolation::InterpolationContext;
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value};
 use std::collections::HashMap;
 
 /// Apply response transformation to a JSON value
@@ -23,11 +23,7 @@ pub fn apply_transformation(
 
     // Apply include/exclude filters
     if !transform.include_fields.is_empty() || !transform.exclude_fields.is_empty() {
-        result = filter_fields(
-            result,
-            &transform.include_fields,
-            &transform.exclude_fields,
-        );
+        result = filter_fields(result, &transform.include_fields, &transform.exclude_fields);
     }
 
     // Apply template if specified
@@ -63,7 +59,7 @@ fn apply_filter(value: &Value, filter: &str) -> Value {
     current
 }
 
-/// Parse array access notation like "items[0]"
+/// Parse array access notation like "items\[0\]"
 fn parse_array_access(part: &str) -> Option<(&str, usize)> {
     if let Some(start) = part.find('[') {
         if let Some(end) = part.find(']') {
@@ -90,9 +86,11 @@ fn apply_field_mappings(value: Value, mappings: &HashMap<String, String>) -> Val
 
             Value::Object(new_map)
         }
-        Value::Array(arr) => {
-            Value::Array(arr.into_iter().map(|v| apply_field_mappings(v, mappings)).collect())
-        }
+        Value::Array(arr) => Value::Array(
+            arr.into_iter()
+                .map(|v| apply_field_mappings(v, mappings))
+                .collect(),
+        ),
         _ => value,
     }
 }
@@ -117,9 +115,11 @@ fn filter_fields(value: Value, include: &[String], exclude: &[String]) -> Value 
 
             Value::Object(new_map)
         }
-        Value::Array(arr) => {
-            Value::Array(arr.into_iter().map(|v| filter_fields(v, include, exclude)).collect())
-        }
+        Value::Array(arr) => Value::Array(
+            arr.into_iter()
+                .map(|v| filter_fields(v, include, exclude))
+                .collect(),
+        ),
         _ => value,
     }
 }
@@ -188,7 +188,7 @@ fn extract_field_value(data: &Value, path: &str) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::http::{HeaderMap, Method};
+    use serde_json::json;
 
     #[test]
     fn test_apply_filter() {

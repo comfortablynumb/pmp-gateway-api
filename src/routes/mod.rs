@@ -1,9 +1,6 @@
 pub mod handler;
 
-use axum::{
-    routing::any,
-    Router,
-};
+use axum::{routing::any, Router};
 use handler::AppState;
 use tracing::debug;
 

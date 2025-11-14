@@ -453,6 +453,6 @@ routes:
 "#;
 
         let config: Config = serde_yaml::from_str(yaml).unwrap();
-        assert_eq!(config.routes[0].subrequests[0].condition.is_some(), true);
+        assert!(config.routes[0].subrequests[0].condition.is_some());
     }
 }

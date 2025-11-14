@@ -75,7 +75,11 @@ impl HttpClient {
 
         let body = response.text().await?;
 
-        debug!("HTTP response received: status={}, body_len={}", status, body.len());
+        debug!(
+            "HTTP response received: status={}, body_len={}",
+            status,
+            body.len()
+        );
 
         Ok(HttpResponse {
             status,
@@ -84,6 +88,7 @@ impl HttpClient {
         })
     }
 
+    #[allow(dead_code)]
     pub fn base_url(&self) -> &str {
         &self.config.base_url
     }
@@ -99,6 +104,7 @@ pub struct HttpResponse {
 
 impl HttpResponse {
     /// Check if the response was successful (2xx status code)
+    #[allow(dead_code)]
     pub fn is_success(&self) -> bool {
         self.status >= 200 && self.status < 300
     }

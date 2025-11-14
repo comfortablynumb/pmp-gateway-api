@@ -8,9 +8,9 @@ use anyhow::Result;
 use std::collections::HashMap;
 
 pub use http::HttpClient;
-pub use mongodb::{MongodbClient, MongoResponse};
-pub use redis_client::{RedisClient, RedisResponse};
-pub use sql::{SqlClient, SqlResponse};
+pub use mongodb::MongodbClient;
+pub use redis_client::RedisClient;
+pub use sql::SqlClient;
 
 /// Client manager that holds all configured clients
 #[derive(Debug, Clone)]

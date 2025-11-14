@@ -55,13 +55,9 @@ pub fn evaluate_condition(condition: &Condition, context: &InterpolationContext)
             }
         }
 
-        Condition::And { conditions } => {
-            conditions.iter().all(|c| evaluate_condition(c, context))
-        }
+        Condition::And { conditions } => conditions.iter().all(|c| evaluate_condition(c, context)),
 
-        Condition::Or { conditions } => {
-            conditions.iter().any(|c| evaluate_condition(c, context))
-        }
+        Condition::Or { conditions } => conditions.iter().any(|c| evaluate_condition(c, context)),
 
         Condition::Not { condition } => !evaluate_condition(condition, context),
     }
@@ -84,13 +80,8 @@ mod tests {
         let mut headers = HeaderMap::new();
         headers.insert("authorization", HeaderValue::from_static("Bearer token"));
 
-        let context = InterpolationContext::new(
-            headers,
-            HashMap::new(),
-            HashMap::new(),
-            None,
-            Method::GET,
-        );
+        let context =
+            InterpolationContext::new(headers, HashMap::new(), HashMap::new(), None, Method::GET);
 
         let condition = Condition::HeaderExists {
             header: "authorization".to_string(),
@@ -104,13 +95,8 @@ mod tests {
         let mut headers = HeaderMap::new();
         headers.insert("x-api-key", HeaderValue::from_static("secret123"));
 
-        let context = InterpolationContext::new(
-            headers,
-            HashMap::new(),
-            HashMap::new(),
-            None,
-            Method::GET,
-        );
+        let context =
+            InterpolationContext::new(headers, HashMap::new(), HashMap::new(), None, Method::GET);
 
         let condition = Condition::HeaderEquals {
             header: "x-api-key".to_string(),
@@ -148,13 +134,8 @@ mod tests {
         let mut query_params = HashMap::new();
         query_params.insert("debug".to_string(), "true".to_string());
 
-        let context = InterpolationContext::new(
-            headers,
-            HashMap::new(),
-            query_params,
-            None,
-            Method::GET,
-        );
+        let context =
+            InterpolationContext::new(headers, HashMap::new(), query_params, None, Method::GET);
 
         let condition = Condition::And {
             conditions: vec![

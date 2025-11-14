@@ -1,7 +1,7 @@
 use crate::clients::ClientManager;
 use crate::conditions::evaluate_condition;
 use crate::config::{
-    ExecutionMode, Config, MongodbSubrequestConfig, RedisSubrequestConfig, SqlSubrequestConfig,
+    Config, ExecutionMode, MongodbSubrequestConfig, RedisSubrequestConfig, SqlSubrequestConfig,
     SubrequestConfig, SubrequestTypeConfig,
 };
 use crate::interpolation::InterpolationContext;
@@ -187,7 +187,7 @@ fn build_execution_order(subrequests: &[SubrequestConfig]) -> Result<Vec<Vec<usi
     let mut executed: std::collections::HashSet<String> = std::collections::HashSet::new();
 
     // Create name to index mapping
-    let name_to_idx: HashMap<String, usize> = subrequests
+    let _name_to_idx: HashMap<String, usize> = subrequests
         .iter()
         .enumerate()
         .filter_map(|(idx, sr)| sr.name.as_ref().map(|name| (name.clone(), idx)))
@@ -243,18 +243,42 @@ async fn execute_single_subrequest(
 ) -> Result<Value, AppError> {
     match &subrequest.config {
         SubrequestTypeConfig::Http(http_config) => {
-            execute_http_subrequest(&state.client_manager, &subrequest.client_id, http_config, context).await
+            execute_http_subrequest(
+                &state.client_manager,
+                &subrequest.client_id,
+                http_config,
+                context,
+            )
+            .await
         }
         SubrequestTypeConfig::Postgres(sql_config)
         | SubrequestTypeConfig::Mysql(sql_config)
         | SubrequestTypeConfig::Sqlite(sql_config) => {
-            execute_sql_subrequest(&state.client_manager, &subrequest.client_id, sql_config, context).await
+            execute_sql_subrequest(
+                &state.client_manager,
+                &subrequest.client_id,
+                sql_config,
+                context,
+            )
+            .await
         }
         SubrequestTypeConfig::Mongodb(mongo_config) => {
-            execute_mongodb_subrequest(&state.client_manager, &subrequest.client_id, mongo_config, context).await
+            execute_mongodb_subrequest(
+                &state.client_manager,
+                &subrequest.client_id,
+                mongo_config,
+                context,
+            )
+            .await
         }
         SubrequestTypeConfig::Redis(redis_config) => {
-            execute_redis_subrequest(&state.client_manager, &subrequest.client_id, redis_config, context).await
+            execute_redis_subrequest(
+                &state.client_manager,
+                &subrequest.client_id,
+                redis_config,
+                context,
+            )
+            .await
         }
     }
 }
@@ -474,6 +498,7 @@ pub enum AppError {
     SubrequestFailed(String),
 
     #[error("Invalid configuration: {0}")]
+    #[allow(dead_code)]
     InvalidConfig(String),
 
     #[error("Route not found")]

@@ -2,7 +2,6 @@ use crate::config::{MysqlClientConfig, PostgresClientConfig, SqliteClientConfig}
 use anyhow::Result;
 use serde_json::Value;
 use sqlx::{Any, AnyPool, Column, Pool, Row, TypeInfo};
-use std::time::Duration;
 use tracing::{debug, info};
 
 /// Generic SQL client that works with multiple database types
@@ -22,7 +21,10 @@ pub enum DatabaseType {
 impl SqlClient {
     /// Create a new PostgreSQL client
     pub async fn new_postgres(config: PostgresClientConfig) -> Result<Self> {
-        info!("Creating PostgreSQL client with max_connections={}", config.max_connections);
+        info!(
+            "Creating PostgreSQL client with max_connections={}",
+            config.max_connections
+        );
 
         let pool = AnyPool::connect_lazy(&config.connection_string)?;
 
@@ -34,7 +36,10 @@ impl SqlClient {
 
     /// Create a new MySQL client
     pub async fn new_mysql(config: MysqlClientConfig) -> Result<Self> {
-        info!("Creating MySQL client with max_connections={}", config.max_connections);
+        info!(
+            "Creating MySQL client with max_connections={}",
+            config.max_connections
+        );
 
         let pool = AnyPool::connect_lazy(&config.connection_string)?;
 
@@ -117,6 +122,7 @@ impl SqlClient {
     }
 
     /// Execute a non-query command (INSERT, UPDATE, DELETE)
+    #[allow(dead_code)]
     pub async fn execute_command(&self, query: &str, params: Vec<String>) -> Result<SqlResponse> {
         debug!(
             "Executing {:?} command: {} with {} params",

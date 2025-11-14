@@ -1,11 +1,7 @@
 use crate::config::{MongoOperation, MongodbClientConfig};
 use anyhow::Result;
-use mongodb::{
-    bson::{doc, Document},
-    Client, Collection, Database,
-};
+use mongodb::{bson::Document, Client, Collection, Database};
 use serde_json::Value;
-use std::time::Duration;
 use tracing::{debug, info};
 
 /// MongoDB client
@@ -17,10 +13,7 @@ pub struct MongodbClient {
 impl MongodbClient {
     /// Create a new MongoDB client
     pub async fn new(config: MongodbClientConfig) -> Result<Self> {
-        info!(
-            "Creating MongoDB client for database: {}",
-            config.database
-        );
+        info!("Creating MongoDB client for database: {}", config.database);
 
         let client = Client::with_uri_str(&config.connection_string).await?;
         let database = client.database(&config.database);
@@ -104,9 +97,7 @@ impl MongodbClient {
                 let filter_doc: Document = serde_json::from_str(filter)?;
                 let update_doc: Document = serde_json::from_str(update)?;
 
-                let result = collection
-                    .update_many(filter_doc, update_doc, None)
-                    .await?;
+                let result = collection.update_many(filter_doc, update_doc, None).await?;
 
                 Ok(MongoResponse {
                     documents: vec![serde_json::json!({

@@ -58,10 +58,12 @@ impl InterpolationContext {
     pub fn interpolate(&self, template: &str) -> String {
         let regex = get_interpolation_regex();
 
-        regex.replace_all(template, |caps: &regex::Captures| {
-            let expr = &caps[1];
-            self.evaluate_expression(expr)
-        }).to_string()
+        regex
+            .replace_all(template, |caps: &regex::Captures| {
+                let expr = &caps[1];
+                self.evaluate_expression(expr)
+            })
+            .to_string()
     }
 
     fn evaluate_expression(&self, expr: &str) -> String {
@@ -71,7 +73,8 @@ impl InterpolationContext {
         if let Some(header_expr) = expr.strip_prefix("request.headers[") {
             if let Some(header_name) = header_expr.strip_suffix(']') {
                 let header_name = header_name.trim_matches('"').trim_matches('\'');
-                return self.headers
+                return self
+                    .headers
                     .get(header_name)
                     .and_then(|v| v.to_str().ok())
                     .unwrap_or("")
@@ -81,7 +84,8 @@ impl InterpolationContext {
 
         // Handle request.path.param_name
         if let Some(param_name) = expr.strip_prefix("request.path.") {
-            return self.path_params
+            return self
+                .path_params
                 .get(param_name)
                 .cloned()
                 .unwrap_or_default();
@@ -89,7 +93,8 @@ impl InterpolationContext {
 
         // Handle request.query.param_name
         if let Some(param_name) = expr.strip_prefix("request.query.") {
-            return self.query_params
+            return self
+                .query_params
                 .get(param_name)
                 .cloned()
                 .unwrap_or_default();
@@ -172,13 +177,8 @@ mod tests {
         let mut headers = HeaderMap::new();
         headers.insert("authorization", HeaderValue::from_static("Bearer token123"));
 
-        let ctx = InterpolationContext::new(
-            headers,
-            HashMap::new(),
-            HashMap::new(),
-            None,
-            Method::GET,
-        );
+        let ctx =
+            InterpolationContext::new(headers, HashMap::new(), HashMap::new(), None, Method::GET);
 
         let result = ctx.interpolate("Authorization: ${request.headers[\"authorization\"]}");
         assert_eq!(result, "Authorization: Bearer token123");
@@ -254,17 +254,11 @@ mod tests {
         let mut path_params = HashMap::new();
         path_params.insert("id".to_string(), "456".to_string());
 
-        let ctx = InterpolationContext::new(
-            headers,
-            path_params,
-            HashMap::new(),
-            None,
-            Method::GET,
-        );
+        let ctx =
+            InterpolationContext::new(headers, path_params, HashMap::new(), None, Method::GET);
 
-        let result = ctx.interpolate(
-            "API Key: ${request.headers[\"x-api-key\"]}, ID: ${request.path.id}"
-        );
+        let result =
+            ctx.interpolate("API Key: ${request.headers[\"x-api-key\"]}, ID: ${request.path.id}");
         assert_eq!(result, "API Key: secret123, ID: 456");
     }
 }
