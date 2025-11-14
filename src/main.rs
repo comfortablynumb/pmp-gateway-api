@@ -1,7 +1,9 @@
 mod clients;
+mod conditions;
 mod config;
 mod interpolation;
 mod routes;
+mod transform;
 
 use anyhow::Result;
 use clients::ClientManager;
@@ -38,8 +40,8 @@ async fn main() -> Result<()> {
         config.routes.len()
     );
 
-    // Initialize client manager
-    let client_manager = ClientManager::from_config(&config)?;
+    // Initialize client manager (now async)
+    let client_manager = ClientManager::from_config(&config).await?;
     info!("Initialized client manager");
 
     // Create application state

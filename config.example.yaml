@@ -1,7 +1,9 @@
-# Example configuration for PMP Gateway API
-# This file demonstrates how to configure clients and routes
+# Comprehensive Example Configuration for PMP Gateway API
+# This file demonstrates all available features including:
+# - Multiple client types (HTTP, SQL, MongoDB, Redis)
+# - Conditional subrequest execution
+# - Response transformation and filtering
 
-# Define your clients (data sources/destinations)
 clients:
   # HTTP client example - for REST APIs
   users_api:
@@ -14,29 +16,41 @@ clients:
     max_connections: 20
     timeout: 30
 
-  # Another HTTP client example - authentication service
-  auth_service:
-    type: http
-    base_url: "https://auth.example.com"
-    headers:
-      X-Service-Name: "PMP-Gateway"
-    min_connections: 1
+  # PostgreSQL database client
+  users_db:
+    type: postgres
+    connection_string: "postgres://user:password@localhost:5432/mydb"
     max_connections: 10
-    timeout: 15
+    timeout: 30
 
-  # Third HTTP client - internal API
-  internal_api:
-    type: http
-    base_url: "http://localhost:8080"
-    headers:
-      X-Internal-Request: "true"
-    min_connections: 5
-    max_connections: 50
-    timeout: 60
+  # MySQL database client
+  analytics_db:
+    type: mysql
+    connection_string: "mysql://user:password@localhost:3306/analytics"
+    max_connections: 5
+    timeout: 30
 
-# Define your routes
+  # SQLite database client
+  local_cache_db:
+    type: sqlite
+    database_path: "sqlite://cache.db"
+    max_connections: 5
+
+  # MongoDB client
+  documents_store:
+    type: mongodb
+    connection_string: "mongodb://localhost:27017"
+    database: "documents"
+    timeout: 30
+
+  # Redis cache client
+  session_cache:
+    type: redis
+    connection_string: "redis://localhost:6379"
+    timeout: 10
+
 routes:
-  # Example 1: Simple GET request that fetches user data
+  # Example 1: Simple HTTP proxy
   - method: GET
     path: /api/users/:id
     subrequests:
@@ -45,84 +59,226 @@ routes:
         uri: /users/${request.path.id}
         method: GET
         headers:
-          # Pass through authorization header from incoming request
           Authorization: "${request.headers[\"authorization\"]}"
 
-  # Example 2: POST request that forwards data to multiple services
-  - method: POST
-    path: /api/users
-    subrequests:
-      # First subrequest: Create user in main API
-      - client_id: users_api
-        type: http
-        uri: /users
-        method: POST
-        headers:
-          Content-Type: "application/json"
-          Authorization: "${request.headers[\"authorization\"]}"
-        body: "${request.body}"
-
-      # Second subrequest: Notify internal service
-      - client_id: internal_api
-        type: http
-        uri: /notifications/user-created
-        method: POST
-        headers:
-          Content-Type: "application/json"
-        body: '{"event": "user_created", "data": ${request.body}}'
-
-  # Example 3: GET with query parameters
+  # Example 2: SQL database query with interpolation
   - method: GET
-    path: /api/search
+    path: /db/users/:id
     subrequests:
-      - client_id: users_api
-        type: http
-        uri: /users
-        method: GET
-        query_params:
-          # Map query parameter from incoming request
-          q: "${request.query.search}"
-          limit: "${request.query.limit}"
-        headers:
-          Authorization: "${request.headers[\"authorization\"]}"
+      - client_id: users_db
+        type: postgres
+        query: "SELECT * FROM users WHERE id = $1"
+        params:
+          - "${request.path.id}"
 
-  # Example 4: Authentication proxy
-  - method: POST
-    path: /api/auth/login
-    subrequests:
-      - client_id: auth_service
-        type: http
-        uri: /v1/authenticate
-        method: POST
-        headers:
-          Content-Type: "application/json"
-          X-Forwarded-For: "${request.headers[\"x-forwarded-for\"]}"
-        body: "${request.body}"
-
-  # Example 5: Multi-client aggregation
+  # Example 3: MongoDB query
   - method: GET
-    path: /api/dashboard/:user_id
+    path: /documents/search
     subrequests:
-      # Get user details
+      - client_id: documents_store
+        type: mongodb
+        collection: "articles"
+        operation:
+          op: find
+          filter: '{"status": "published", "author": "${request.query.author}"}'
+          limit: 10
+
+  # Example 4: Redis cache with conditional execution
+  - method: GET
+    path: /cached/user/:id
+    subrequests:
+      # First, try to get from cache
+      - client_id: session_cache
+        type: redis
+        operation:
+          op: get
+          key: "user:${request.path.id}"
+
+      # If cache miss (detected via header), fetch from DB
+      - client_id: users_db
+        type: postgres
+        query: "SELECT * FROM users WHERE id = $1"
+        params:
+          - "${request.path.id}"
+        condition:
+          type: headerexists
+          header: "X-Cache-Miss"
+
+  # Example 5: Multi-source aggregation with response transformation
+  - method: GET
+    path: /dashboard/:user_id
+    subrequests:
+      # Get user profile from API
       - client_id: users_api
         type: http
         uri: /users/${request.path.user_id}
         method: GET
-        headers:
-          Authorization: "${request.headers[\"authorization\"]}"
 
-      # Get user's posts
+      # Get user stats from PostgreSQL
+      - client_id: users_db
+        type: postgres
+        query: "SELECT * FROM user_stats WHERE user_id = $1"
+        params:
+          - "${request.path.user_id}"
+
+      # Get recent activity from MongoDB
+      - client_id: documents_store
+        type: mongodb
+        collection: "activities"
+        operation:
+          op: find
+          filter: '{"user_id": "${request.path.user_id}"}'
+          limit: 5
+
+    # Transform the aggregated response
+    response_transform:
+      # Rename fields for consistency
+      field_mappings:
+        subrequests: "data_sources"
+        count: "sources_count"
+      # Only include specific fields
+      include_fields:
+        - "data_sources"
+        - "sources_count"
+
+  # Example 6: Conditional execution with multiple conditions
+  - method: POST
+    path: /api/users
+    subrequests:
+      # Insert into database only if admin
+      - client_id: users_db
+        type: postgres
+        query: "INSERT INTO users (name, email) VALUES ($1, $2) RETURNING id"
+        params:
+          - "${request.body}"
+          - "${request.body}"
+        condition:
+          type: and
+          conditions:
+            - type: headerexists
+              header: "Authorization"
+            - type: headerequals
+              header: "X-Role"
+              value: "admin"
+
+      # Log the action to MongoDB
+      - client_id: documents_store
+        type: mongodb
+        collection: "audit_log"
+        operation:
+          op: insert
+          document: '{"action": "user_created", "user": "${request.body}", "timestamp": "now"}'
+
+  # Example 7: Redis cache operations
+  - method: POST
+    path: /cache/:key
+    subrequests:
+      - client_id: session_cache
+        type: redis
+        operation:
+          op: set
+          key: "${request.path.key}"
+          value: "${request.body}"
+          expiration: 3600  # 1 hour
+
+  # Example 8: Complex conditional logic (OR condition)
+  - method: GET
+    path: /premium/content/:id
+    subrequests:
+      # Only execute if user is premium OR admin
+      - client_id: documents_store
+        type: mongodb
+        collection: "premium_content"
+        operation:
+          op: findone
+          filter: '{"id": "${request.path.id}"}'
+        condition:
+          type: or
+          conditions:
+            - type: headerequals
+              header: "X-Subscription"
+              value: "premium"
+            - type: headerequals
+              header: "X-Role"
+              value: "admin"
+
+  # Example 9: Response filtering and transformation
+  - method: GET
+    path: /api/posts
+    subrequests:
       - client_id: users_api
         type: http
-        uri: /users/${request.path.user_id}/posts
+        uri: /posts
         method: GET
-        headers:
-          Authorization: "${request.headers[\"authorization\"]}"
+        query_params:
+          userId: "${request.query.userId}"
 
-      # Get additional data from internal API
-      - client_id: internal_api
+    # Filter and transform response
+    response_transform:
+      # Extract specific data from response
+      filter: "subrequests[0].body"
+      # Exclude sensitive fields
+      exclude_fields:
+        - "userId"
+        - "internalId"
+
+  # Example 10: MySQL analytics query
+  - method: GET
+    path: /analytics/summary
+    subrequests:
+      - client_id: analytics_db
+        type: mysql
+        query: "SELECT DATE(created_at) as date, COUNT(*) as count FROM events WHERE user_id = ? GROUP BY DATE(created_at)"
+        params:
+          - "${request.query.user_id}"
+
+  # Example 11: SQLite local cache
+  - method: GET
+    path: /local/config/:key
+    subrequests:
+      - client_id: local_cache_db
+        type: sqlite
+        query: "SELECT value FROM config WHERE key = ?"
+        params:
+          - "${request.path.key}"
+
+  # Example 12: Redis hash operations
+  - method: GET
+    path: /user-settings/:user_id/:setting
+    subrequests:
+      - client_id: session_cache
+        type: redis
+        operation:
+          op: hget
+          key: "user_settings:${request.path.user_id}"
+          field: "${request.path.setting}"
+
+  # Example 13: NOT condition (execute if header does NOT exist)
+  - method: GET
+    path: /public/data
+    subrequests:
+      - client_id: users_api
         type: http
-        uri: /analytics/user/${request.path.user_id}
+        uri: /public/posts
         method: GET
-        headers:
-          X-User-Id: "${request.path.user_id}"
+        condition:
+          type: not
+          condition:
+            type: headerexists
+            header: "X-Internal-Request"
+
+  # Example 14: Field matching with regex
+  - method: GET
+    path: /search/:query
+    subrequests:
+      - client_id: documents_store
+        type: mongodb
+        collection: "documents"
+        operation:
+          op: find
+          filter: '{"title": {"$regex": "${request.path.query}", "$options": "i"}}'
+          limit: 20
+        condition:
+          type: fieldmatches
+          field: "query"
+          pattern: "^[a-zA-Z0-9\\s]+$"  # Only alphanumeric queries
