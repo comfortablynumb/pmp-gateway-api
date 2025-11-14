@@ -1,0 +1,29 @@
+# Simple test configuration for PMP Gateway API
+clients:
+  jsonplaceholder:
+    type: http
+    base_url: "https://jsonplaceholder.typicode.com"
+    headers:
+      User-Agent: "PMP-Gateway/1.0"
+    min_connections: 1
+    max_connections: 10
+    timeout: 30
+
+routes:
+  - method: GET
+    path: /users/:id
+    subrequests:
+      - client_id: jsonplaceholder
+        type: http
+        uri: /users/${request.path.id}
+        method: GET
+
+  - method: GET
+    path: /posts
+    subrequests:
+      - client_id: jsonplaceholder
+        type: http
+        uri: /posts
+        method: GET
+        query_params:
+          userId: "${request.query.userId}"

@@ -1,0 +1,128 @@
+# Example configuration for PMP Gateway API
+# This file demonstrates how to configure clients and routes
+
+# Define your clients (data sources/destinations)
+clients:
+  # HTTP client example - for REST APIs
+  users_api:
+    type: http
+    base_url: "https://jsonplaceholder.typicode.com"
+    headers:
+      User-Agent: "PMP-Gateway/1.0"
+      Accept: "application/json"
+    min_connections: 2
+    max_connections: 20
+    timeout: 30
+
+  # Another HTTP client example - authentication service
+  auth_service:
+    type: http
+    base_url: "https://auth.example.com"
+    headers:
+      X-Service-Name: "PMP-Gateway"
+    min_connections: 1
+    max_connections: 10
+    timeout: 15
+
+  # Third HTTP client - internal API
+  internal_api:
+    type: http
+    base_url: "http://localhost:8080"
+    headers:
+      X-Internal-Request: "true"
+    min_connections: 5
+    max_connections: 50
+    timeout: 60
+
+# Define your routes
+routes:
+  # Example 1: Simple GET request that fetches user data
+  - method: GET
+    path: /api/users/:id
+    subrequests:
+      - client_id: users_api
+        type: http
+        uri: /users/${request.path.id}
+        method: GET
+        headers:
+          # Pass through authorization header from incoming request
+          Authorization: "${request.headers[\"authorization\"]}"
+
+  # Example 2: POST request that forwards data to multiple services
+  - method: POST
+    path: /api/users
+    subrequests:
+      # First subrequest: Create user in main API
+      - client_id: users_api
+        type: http
+        uri: /users
+        method: POST
+        headers:
+          Content-Type: "application/json"
+          Authorization: "${request.headers[\"authorization\"]}"
+        body: "${request.body}"
+
+      # Second subrequest: Notify internal service
+      - client_id: internal_api
+        type: http
+        uri: /notifications/user-created
+        method: POST
+        headers:
+          Content-Type: "application/json"
+        body: '{"event": "user_created", "data": ${request.body}}'
+
+  # Example 3: GET with query parameters
+  - method: GET
+    path: /api/search
+    subrequests:
+      - client_id: users_api
+        type: http
+        uri: /users
+        method: GET
+        query_params:
+          # Map query parameter from incoming request
+          q: "${request.query.search}"
+          limit: "${request.query.limit}"
+        headers:
+          Authorization: "${request.headers[\"authorization\"]}"
+
+  # Example 4: Authentication proxy
+  - method: POST
+    path: /api/auth/login
+    subrequests:
+      - client_id: auth_service
+        type: http
+        uri: /v1/authenticate
+        method: POST
+        headers:
+          Content-Type: "application/json"
+          X-Forwarded-For: "${request.headers[\"x-forwarded-for\"]}"
+        body: "${request.body}"
+
+  # Example 5: Multi-client aggregation
+  - method: GET
+    path: /api/dashboard/:user_id
+    subrequests:
+      # Get user details
+      - client_id: users_api
+        type: http
+        uri: /users/${request.path.user_id}
+        method: GET
+        headers:
+          Authorization: "${request.headers[\"authorization\"]}"
+
+      # Get user's posts
+      - client_id: users_api
+        type: http
+        uri: /users/${request.path.user_id}/posts
+        method: GET
+        headers:
+          Authorization: "${request.headers[\"authorization\"]}"
+
+      # Get additional data from internal API
+      - client_id: internal_api
+        type: http
+        uri: /analytics/user/${request.path.user_id}
+        method: GET
+        headers:
+          X-User-Id: "${request.path.user_id}"
