@@ -351,7 +351,9 @@ impl Config {
     /// Load configuration from a YAML file
     pub fn from_yaml_file(path: &str) -> anyhow::Result<Self> {
         let content = std::fs::read_to_string(path)?;
-        let config: Config = serde_yaml::from_str(&content)?;
+        // Interpolate environment variables
+        let interpolated = crate::env_interpolation::interpolate_yaml_string(&content);
+        let config: Config = serde_yaml::from_str(&interpolated)?;
         Ok(config)
     }
 

@@ -1,7 +1,10 @@
 mod clients;
 mod conditions;
 mod config;
+mod env_interpolation;
+mod health;
 mod interpolation;
+mod middleware;
 mod routes;
 mod transform;
 
@@ -50,8 +53,11 @@ async fn main() -> Result<()> {
         client_manager: Arc::new(client_manager),
     };
 
-    // Build router
-    let app = build_router(state).layer(TraceLayer::new_for_http());
+    // Build router with middlewares
+    let app = build_router(state)
+        .layer(axum::middleware::from_fn(middleware::request_id_middleware))
+        .layer(axum::middleware::from_fn(middleware::metrics_middleware))
+        .layer(TraceLayer::new_for_http());
 
     // Determine bind address
     let host = std::env::var("HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
