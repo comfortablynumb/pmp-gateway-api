@@ -66,14 +66,6 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        rust:
-          - stable
-          - beta
-          - nightly
-    continue-on-error: ${{ matrix.rust == 'nightly' }}
-
     steps:
       - uses: actions/checkout@v4
 
@@ -81,7 +73,7 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: ${{ matrix.rust }}
+          toolchain: stable
           override: true
 
       - name: Cache cargo registry

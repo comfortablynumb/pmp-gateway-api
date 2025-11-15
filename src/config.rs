@@ -8,6 +8,184 @@ pub struct Config {
     pub clients: HashMap<String, ClientConfig>,
     /// List of route configurations
     pub routes: Vec<RouteConfig>,
+    /// Global server configuration
+    #[serde(default)]
+    pub server: ServerConfig,
+}
+
+/// Server-level configuration
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ServerConfig {
+    /// CORS configuration
+    #[serde(default)]
+    pub cors: Option<CorsConfig>,
+    /// Request logging configuration
+    #[serde(default)]
+    pub logging: LoggingConfig,
+    /// Global timeout in seconds
+    #[serde(default = "default_global_timeout")]
+    pub timeout: u64,
+    /// Maximum request body size in bytes
+    #[serde(default = "default_max_body_size")]
+    pub max_body_size: usize,
+    /// Rate limiting configuration
+    #[serde(default)]
+    pub rate_limit: Option<RateLimitConfig>,
+    /// Security configuration
+    #[serde(default)]
+    pub security: SecurityConfig,
+}
+
+impl Default for ServerConfig {
+    fn default() -> Self {
+        Self {
+            cors: None,
+            logging: LoggingConfig::default(),
+            timeout: default_global_timeout(),
+            max_body_size: default_max_body_size(),
+            rate_limit: None,
+            security: SecurityConfig::default(),
+        }
+    }
+}
+
+/// CORS configuration
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct CorsConfig {
+    /// Allowed origins (e.g., ["https://example.com", "*"])
+    pub allowed_origins: Vec<String>,
+    /// Allowed methods (e.g., ["GET", "POST"])
+    #[serde(default = "default_cors_methods")]
+    pub allowed_methods: Vec<String>,
+    /// Allowed headers
+    #[serde(default)]
+    pub allowed_headers: Vec<String>,
+    /// Whether to allow credentials
+    #[serde(default)]
+    pub allow_credentials: bool,
+    /// Max age for preflight cache in seconds
+    #[serde(default = "default_cors_max_age")]
+    pub max_age: u64,
+}
+
+/// Request logging configuration
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct LoggingConfig {
+    /// Log request bodies
+    #[serde(default)]
+    pub log_request_body: bool,
+    /// Log response bodies
+    #[serde(default)]
+    pub log_response_body: bool,
+    /// Log headers
+    #[serde(default = "default_true")]
+    pub log_headers: bool,
+}
+
+impl Default for LoggingConfig {
+    fn default() -> Self {
+        Self {
+            log_request_body: false,
+            log_response_body: false,
+            log_headers: true,
+        }
+    }
+}
+
+/// Rate limiting configuration
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct RateLimitConfig {
+    /// Requests per second
+    pub requests_per_second: u64,
+    /// Burst size
+    #[serde(default = "default_burst_size")]
+    pub burst_size: u32,
+}
+
+/// Security configuration
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct SecurityConfig {
+    /// API key validation
+    #[serde(default)]
+    pub api_keys: Option<ApiKeyConfig>,
+    /// JWT validation
+    #[serde(default)]
+    pub jwt: Option<JwtConfig>,
+    /// IP allowlist/blocklist
+    #[serde(default)]
+    pub ip_filter: Option<IpFilterConfig>,
+}
+
+/// API key configuration
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ApiKeyConfig {
+    /// Header name containing the API key
+    #[serde(default = "default_api_key_header")]
+    pub header: String,
+    /// Valid API keys
+    pub keys: Vec<String>,
+}
+
+/// JWT configuration
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct JwtConfig {
+    /// JWT secret or public key
+    pub secret: String,
+    /// Algorithm (HS256, RS256, etc.)
+    #[serde(default = "default_jwt_algorithm")]
+    pub algorithm: String,
+    /// Whether to validate expiration
+    #[serde(default = "default_true")]
+    pub validate_exp: bool,
+}
+
+/// IP filter configuration
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct IpFilterConfig {
+    /// IP allowlist (if set, only these IPs are allowed)
+    #[serde(default)]
+    pub allowlist: Vec<String>,
+    /// IP blocklist (these IPs are blocked)
+    #[serde(default)]
+    pub blocklist: Vec<String>,
+}
+
+fn default_global_timeout() -> u64 {
+    30
+}
+
+fn default_max_body_size() -> usize {
+    10 * 1024 * 1024 // 10 MB
+}
+
+fn default_cors_methods() -> Vec<String> {
+    vec![
+        "GET".to_string(),
+        "POST".to_string(),
+        "PUT".to_string(),
+        "DELETE".to_string(),
+        "OPTIONS".to_string(),
+    ]
+}
+
+fn default_cors_max_age() -> u64 {
+    3600
+}
+
+fn default_burst_size() -> u32 {
+    10
+}
+
+fn default_api_key_header() -> String {
+    "x-api-key".to_string()
+}
+
+fn default_jwt_algorithm() -> String {
+    "HS256".to_string()
+}
+
+fn default_true() -> bool {
+    true
 }
 
 /// Client configuration (supports different client types)
@@ -39,6 +217,35 @@ pub struct HttpClientConfig {
     /// Connection timeout in seconds
     #[serde(default = "default_timeout")]
     pub timeout: u64,
+    /// Retry configuration
+    #[serde(default)]
+    pub retry: Option<RetryConfig>,
+}
+
+/// Retry configuration
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct RetryConfig {
+    /// Maximum number of retry attempts
+    #[serde(default = "default_max_retries")]
+    pub max_retries: u32,
+    /// Initial backoff in milliseconds
+    #[serde(default = "default_initial_backoff")]
+    pub initial_backoff_ms: u64,
+    /// Maximum backoff in milliseconds
+    #[serde(default = "default_max_backoff")]
+    pub max_backoff_ms: u64,
+}
+
+fn default_max_retries() -> u32 {
+    3
+}
+
+fn default_initial_backoff() -> u64 {
+    100
+}
+
+fn default_max_backoff() -> u64 {
+    5000
 }
 
 /// PostgreSQL client configuration
@@ -351,7 +558,9 @@ impl Config {
     /// Load configuration from a YAML file
     pub fn from_yaml_file(path: &str) -> anyhow::Result<Self> {
         let content = std::fs::read_to_string(path)?;
-        let config: Config = serde_yaml::from_str(&content)?;
+        // Interpolate environment variables
+        let interpolated = crate::env_interpolation::interpolate_yaml_string(&content);
+        let config: Config = serde_yaml::from_str(&interpolated)?;
         Ok(config)
     }
 

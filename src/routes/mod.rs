@@ -1,6 +1,9 @@
 pub mod handler;
 
-use axum::{routing::any, Router};
+use axum::{
+    routing::{any, get},
+    Router,
+};
 use handler::AppState;
 use tracing::debug;
 
@@ -8,6 +11,12 @@ use tracing::debug;
 pub fn build_router(state: AppState) -> Router {
     let config = state.config.clone();
     let mut router = Router::new();
+
+    // Add health and metrics endpoints
+    router = router
+        .route("/health", get(crate::health::health_check))
+        .route("/ready", get(crate::health::readiness_check))
+        .route("/metrics", get(crate::middleware::metrics::metrics_handler));
 
     // Register each route from configuration
     for route in &config.routes {
