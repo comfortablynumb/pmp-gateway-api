@@ -1,5 +1,9 @@
+pub mod hot_reload;
+
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+
+pub use hot_reload::ConfigHotReload;
 
 /// Main configuration structure
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -203,8 +207,15 @@ pub enum ClientConfig {
 /// HTTP client configuration
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct HttpClientConfig {
-    /// Base URL for the HTTP client
+    /// Base URL for the HTTP client (if using a single backend)
+    #[serde(default)]
     pub base_url: String,
+    /// Multiple backend URLs (for load balancing)
+    #[serde(default)]
+    pub backends: Vec<String>,
+    /// Load balancing strategy
+    #[serde(default)]
+    pub load_balance: Option<LoadBalanceStrategy>,
     /// Default headers to include in all requests
     #[serde(default)]
     pub headers: HashMap<String, String>,
@@ -223,6 +234,15 @@ pub struct HttpClientConfig {
     /// Circuit breaker configuration
     #[serde(default)]
     pub circuit_breaker: Option<CircuitBreakerConfigYaml>,
+}
+
+/// Load balancing strategy
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum LoadBalanceStrategy {
+    RoundRobin,
+    Random,
+    LeastConnections,
 }
 
 /// Retry configuration

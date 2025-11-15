@@ -1,4 +1,5 @@
-use crate::config::HttpClientConfig;
+use crate::clients::LoadBalancer;
+use crate::config::{HttpClientConfig, LoadBalanceStrategy};
 use crate::middleware::{create_circuit_breaker, CircuitBreakerConfig, CircuitBreakerWrapper};
 use anyhow::Result;
 use reqwest::{Client, Method};
@@ -7,12 +8,13 @@ use std::sync::Arc;
 use std::time::Duration;
 use tracing::{debug, warn};
 
-/// HTTP client with connection pooling and circuit breaker
+/// HTTP client with connection pooling, circuit breaker, and load balancing
 #[derive(Clone)]
 pub struct HttpClient {
     config: HttpClientConfig,
     client: Client,
     circuit_breaker: Option<Arc<CircuitBreakerWrapper>>,
+    load_balancer: Option<LoadBalancer>,
 }
 
 // Manual Debug implementation to handle CircuitBreaker
@@ -22,6 +24,7 @@ impl std::fmt::Debug for HttpClient {
             .field("config", &self.config)
             .field("client", &self.client)
             .field("circuit_breaker", &self.circuit_breaker.is_some())
+            .field("load_balancer", &self.load_balancer.is_some())
             .finish()
     }
 }
@@ -42,10 +45,22 @@ impl HttpClient {
             })
         });
 
+        // Initialize load balancer if multiple backends configured
+        let load_balancer = if !config.backends.is_empty() {
+            let strategy = config
+                .load_balance
+                .clone()
+                .unwrap_or(LoadBalanceStrategy::RoundRobin);
+            Some(LoadBalancer::new(config.backends.clone(), strategy))
+        } else {
+            None
+        };
+
         Ok(Self {
             config,
             client,
             circuit_breaker,
+            load_balancer,
         })
     }
 
@@ -66,7 +81,15 @@ impl HttpClient {
             }
         }
 
-        let url = format!("{}{}", self.config.base_url, uri);
+        // Select backend URL using load balancer if available
+        let base_url = if let Some(ref lb) = self.load_balancer {
+            lb.select_backend()
+                .ok_or_else(|| anyhow::anyhow!("No available backends"))?
+        } else {
+            self.config.base_url.clone()
+        };
+
+        let url = format!("{}{}", base_url, uri);
         let method_obj = Method::from_bytes(method.as_bytes())?;
 
         debug!(
@@ -209,6 +232,8 @@ mod tests {
     fn test_http_client_creation() {
         let config = HttpClientConfig {
             base_url: "https://api.example.com".to_string(),
+            backends: vec![],
+            load_balance: None,
             headers: HashMap::new(),
             min_connections: 1,
             max_connections: 10,
@@ -219,6 +244,28 @@ mod tests {
 
         let client = HttpClient::new(config);
         assert!(client.is_ok());
+    }
+
+    #[test]
+    fn test_http_client_with_load_balancing() {
+        let config = HttpClientConfig {
+            base_url: String::new(),
+            backends: vec![
+                "https://backend1.example.com".to_string(),
+                "https://backend2.example.com".to_string(),
+            ],
+            load_balance: Some(LoadBalanceStrategy::RoundRobin),
+            headers: HashMap::new(),
+            min_connections: 1,
+            max_connections: 10,
+            timeout: 30,
+            retry: None,
+            circuit_breaker: None,
+        };
+
+        let client = HttpClient::new(config);
+        assert!(client.is_ok());
+        assert!(client.unwrap().load_balancer.is_some());
     }
 
     #[test]
