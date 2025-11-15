@@ -220,6 +220,9 @@ pub struct HttpClientConfig {
     /// Retry configuration
     #[serde(default)]
     pub retry: Option<RetryConfig>,
+    /// Circuit breaker configuration
+    #[serde(default)]
+    pub circuit_breaker: Option<CircuitBreakerConfigYaml>,
 }
 
 /// Retry configuration
@@ -246,6 +249,25 @@ fn default_initial_backoff() -> u64 {
 
 fn default_max_backoff() -> u64 {
     5000
+}
+
+/// Circuit breaker configuration for YAML
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct CircuitBreakerConfigYaml {
+    /// Number of consecutive failures before opening the circuit
+    #[serde(default = "default_failure_threshold")]
+    pub failure_threshold: u32,
+    /// Timeout in seconds before attempting to close the circuit
+    #[serde(default = "default_circuit_timeout")]
+    pub timeout_seconds: u64,
+}
+
+fn default_failure_threshold() -> u32 {
+    5
+}
+
+fn default_circuit_timeout() -> u64 {
+    30
 }
 
 /// PostgreSQL client configuration

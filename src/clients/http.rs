@@ -1,15 +1,29 @@
 use crate::config::HttpClientConfig;
+use crate::middleware::{create_circuit_breaker, CircuitBreakerConfig, CircuitBreakerWrapper};
 use anyhow::Result;
 use reqwest::{Client, Method};
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Duration;
-use tracing::debug;
+use tracing::{debug, warn};
 
-/// HTTP client with connection pooling
-#[derive(Debug, Clone)]
+/// HTTP client with connection pooling and circuit breaker
+#[derive(Clone)]
 pub struct HttpClient {
     config: HttpClientConfig,
     client: Client,
+    circuit_breaker: Option<Arc<CircuitBreakerWrapper>>,
+}
+
+// Manual Debug implementation to handle CircuitBreaker
+impl std::fmt::Debug for HttpClient {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("HttpClient")
+            .field("config", &self.config)
+            .field("client", &self.client)
+            .field("circuit_breaker", &self.circuit_breaker.is_some())
+            .finish()
+    }
 }
 
 impl HttpClient {
@@ -20,10 +34,22 @@ impl HttpClient {
             .timeout(Duration::from_secs(config.timeout))
             .build()?;
 
-        Ok(Self { config, client })
+        // Initialize circuit breaker if configured
+        let circuit_breaker = config.circuit_breaker.as_ref().map(|cb_config| {
+            create_circuit_breaker(CircuitBreakerConfig {
+                failure_threshold: cb_config.failure_threshold,
+                timeout: Duration::from_secs(cb_config.timeout_seconds),
+            })
+        });
+
+        Ok(Self {
+            config,
+            client,
+            circuit_breaker,
+        })
     }
 
-    /// Execute an HTTP request with retry logic
+    /// Execute an HTTP request with retry logic and circuit breaker
     pub async fn execute_request(
         &self,
         method: &str,
@@ -32,6 +58,14 @@ impl HttpClient {
         body: Option<String>,
         query_params: HashMap<String, String>,
     ) -> Result<HttpResponse> {
+        // Check circuit breaker before attempting request
+        if let Some(ref cb) = self.circuit_breaker {
+            if !cb.is_call_permitted() {
+                warn!("Circuit breaker is open, rejecting request to {}", uri);
+                return Err(anyhow::anyhow!("Circuit breaker is open"));
+            }
+        }
+
         let url = format!("{}{}", self.config.base_url, uri);
         let method_obj = Method::from_bytes(method.as_bytes())?;
 
@@ -107,6 +141,11 @@ impl HttpClient {
                         body.len()
                     );
 
+                    // Record success with circuit breaker
+                    if let Some(ref cb) = self.circuit_breaker {
+                        let _ = cb.call(|| Ok::<(), ()>(()));
+                    }
+
                     return Ok(HttpResponse {
                         status,
                         headers,
@@ -130,6 +169,11 @@ impl HttpClient {
                     tokio::time::sleep(Duration::from_millis(backoff)).await;
                 }
             }
+        }
+
+        // Record failure with circuit breaker
+        if let Some(ref cb) = self.circuit_breaker {
+            let _ = cb.call(|| Err::<(), ()>(()));
         }
 
         Err(last_error.unwrap().into())
@@ -170,6 +214,7 @@ mod tests {
             max_connections: 10,
             timeout: 30,
             retry: None,
+            circuit_breaker: None,
         };
 
         let client = HttpClient::new(config);

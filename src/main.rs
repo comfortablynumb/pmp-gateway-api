@@ -16,6 +16,7 @@ use routes::{build_router, handler::AppState};
 use std::sync::Arc;
 use std::time::Duration;
 use tower_http::{
+    compression::CompressionLayer,
     cors::{Any, CorsLayer},
     limit::RequestBodyLimitLayer,
     timeout::TimeoutLayer,
@@ -36,6 +37,10 @@ async fn main() -> Result<()> {
         .init();
 
     info!("Starting PMP Gateway API");
+
+    // Initialize Prometheus metrics
+    middleware::init_metrics();
+    info!("Initialized Prometheus metrics exporter");
 
     // Load configuration
     let config_path = std::env::var("CONFIG_PATH").unwrap_or_else(|_| "config.yaml".to_string());
@@ -150,6 +155,10 @@ async fn main() -> Result<()> {
         middleware::create_logging_middleware(config.server.logging.clone()),
     ));
 
+    // Apply compression (gzip and brotli)
+    info!("Enabling response compression (gzip, brotli)");
+    app = app.layer(CompressionLayer::new());
+
     // Apply core middlewares
     app = app
         .layer(axum::middleware::from_fn(middleware::request_id_middleware))
@@ -163,9 +172,45 @@ async fn main() -> Result<()> {
 
     info!("Starting server on {}", bind_addr);
 
-    // Start server
+    // Start server with graceful shutdown
     let listener = tokio::net::TcpListener::bind(&bind_addr).await?;
-    axum::serve(listener, app).await?;
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal())
+        .await?;
 
+    info!("Server stopped gracefully");
     Ok(())
+}
+
+/// Handle shutdown signals for graceful termination
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl+C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("failed to install SIGTERM handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {
+            tracing::info!("Received Ctrl+C signal, shutting down gracefully");
+        },
+        _ = terminate => {
+            tracing::info!("Received SIGTERM signal, shutting down gracefully");
+        },
+    }
+
+    // Give connections time to finish
+    tracing::info!("Draining connections...");
+    tokio::time::sleep(Duration::from_secs(1)).await;
 }
