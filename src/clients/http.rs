@@ -64,6 +64,7 @@ impl HttpClient {
             .unwrap_or(5000);
 
         let mut attempt = 0;
+        #[allow(unused_assignments)]
         let mut last_error: Option<reqwest::Error> = None;
 
         loop {

@@ -9,13 +9,12 @@ mod routes;
 mod transform;
 
 use anyhow::Result;
-use axum::http::{header, Method};
+use axum::http::Method;
 use clients::ClientManager;
 use config::Config;
 use routes::{build_router, handler::AppState};
 use std::sync::Arc;
 use std::time::Duration;
-use tower::ServiceBuilder;
 use tower_http::{
     cors::{Any, CorsLayer},
     limit::RequestBodyLimitLayer,

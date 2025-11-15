@@ -1,5 +1,4 @@
 use axum::{
-    body::Body,
     extract::{ConnectInfo, Request},
     http::{HeaderMap, StatusCode},
     middleware::Next,
@@ -14,6 +13,7 @@ use std::sync::Arc;
 
 use crate::config::{ApiKeyConfig, IpFilterConfig, JwtConfig, SecurityConfig};
 
+#[allow(dead_code)]
 #[derive(Debug, Serialize, Deserialize)]
 struct Claims {
     sub: String,
@@ -21,6 +21,7 @@ struct Claims {
 }
 
 /// Security middleware that validates API keys, JWTs, and IP filters
+#[allow(dead_code)]
 pub async fn security_middleware(
     config: Arc<SecurityConfig>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
@@ -63,6 +64,7 @@ pub async fn security_middleware(
     Ok(next.run(request).await)
 }
 
+#[allow(dead_code)]
 fn is_ip_allowed(ip: &str, config: &IpFilterConfig) -> bool {
     // If allowlist is set, only those IPs are allowed
     if !config.allowlist.is_empty() {
@@ -83,6 +85,7 @@ fn is_ip_allowed(ip: &str, config: &IpFilterConfig) -> bool {
     true
 }
 
+#[allow(dead_code)]
 fn validate_api_key(headers: &HeaderMap, config: &ApiKeyConfig) -> bool {
     if let Some(api_key) = headers.get(&config.header) {
         if let Ok(key_str) = api_key.to_str() {
@@ -92,6 +95,7 @@ fn validate_api_key(headers: &HeaderMap, config: &ApiKeyConfig) -> bool {
     false
 }
 
+#[allow(dead_code)]
 fn validate_jwt(headers: &HeaderMap, config: &JwtConfig) -> bool {
     if let Some(auth_header) = headers.get("authorization") {
         if let Ok(auth_str) = auth_header.to_str() {
@@ -117,6 +121,8 @@ fn validate_jwt(headers: &HeaderMap, config: &JwtConfig) -> bool {
 }
 
 /// Create security middleware with config
+#[allow(dead_code)]
+#[allow(clippy::type_complexity)]
 pub fn create_security_middleware(
     config: SecurityConfig,
 ) -> impl Fn(

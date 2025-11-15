@@ -1,10 +1,4 @@
-use axum::{
-    body::Body,
-    extract::Request,
-    http::StatusCode,
-    middleware::Next,
-    response::{IntoResponse, Response},
-};
+use axum::{extract::Request, middleware::Next, response::Response};
 use std::sync::Arc;
 use tracing::{debug, info};
 

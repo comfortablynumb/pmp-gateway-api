@@ -103,7 +103,7 @@ pub struct RateLimitConfig {
 }
 
 /// Security configuration
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct SecurityConfig {
     /// API key validation
     #[serde(default)]
@@ -114,16 +114,6 @@ pub struct SecurityConfig {
     /// IP allowlist/blocklist
     #[serde(default)]
     pub ip_filter: Option<IpFilterConfig>,
-}
-
-impl Default for SecurityConfig {
-    fn default() -> Self {
-        Self {
-            api_keys: None,
-            jwt: None,
-            ip_filter: None,
-        }
-    }
 }
 
 /// API key configuration
