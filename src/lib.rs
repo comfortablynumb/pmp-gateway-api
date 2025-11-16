@@ -7,5 +7,6 @@ pub mod env_interpolation;
 pub mod health;
 pub mod interpolation;
 pub mod middleware;
+pub mod routing;
 pub mod routes;
 pub mod transform;

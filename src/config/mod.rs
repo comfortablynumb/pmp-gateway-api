@@ -1,9 +1,11 @@
 pub mod hot_reload;
+pub mod traffic_split;
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 pub use hot_reload::ConfigHotReload;
+pub use traffic_split::{RoutingRule, TrafficSplitConfig, TrafficVariant};
 
 /// Main configuration structure
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -379,6 +381,9 @@ pub struct RouteConfig {
     /// Execution mode: sequential or parallel (default: parallel)
     #[serde(default = "default_execution_mode")]
     pub execution_mode: ExecutionMode,
+    /// Traffic split configuration for A/B testing or canary deployments
+    #[serde(default)]
+    pub traffic_split: Option<TrafficSplitConfig>,
 }
 
 /// Execution mode for subrequests
