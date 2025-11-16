@@ -2,6 +2,8 @@
 
 This guide explains how to build and run the PMP Gateway API using Docker and Docker Compose.
 
+> **Note**: This guide uses Docker Compose V2 syntax (`docker compose`). If you have Docker Compose V1, use `docker-compose` instead.
+
 ## Quick Start
 
 ### Development Mode
@@ -9,7 +11,7 @@ This guide explains how to build and run the PMP Gateway API using Docker and Do
 Run the application with all dependencies:
 
 ```bash
-docker-compose --profile app up --build
+docker compose --profile app up --build
 ```
 
 The gateway will be available at `http://localhost:8080`
@@ -19,7 +21,7 @@ The gateway will be available at `http://localhost:8080`
 Run the full integration test suite:
 
 ```bash
-docker-compose --profile integration-tests up --build --abort-on-container-exit
+docker compose --profile integration-tests up --build --abort-on-container-exit
 ```
 
 This will:
@@ -123,25 +125,25 @@ docker run -p 8080:8080 \
 #### Start all services:
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 #### View logs:
 
 ```bash
-docker-compose logs -f app
+docker compose logs -f app
 ```
 
 #### Stop services:
 
 ```bash
-docker-compose down
+docker compose down
 ```
 
 #### Clean up volumes:
 
 ```bash
-docker-compose down -v
+docker compose down -v
 ```
 
 ## Environment Variables
@@ -252,7 +254,7 @@ services:
 Scale the gateway horizontally:
 
 ```bash
-docker-compose up -d --scale app=3
+docker compose up -d --scale app=3
 ```
 
 Use a load balancer (nginx, traefik) in front of multiple instances.
@@ -264,13 +266,13 @@ Use a load balancer (nginx, traefik) in front of multiple instances.
 Check logs:
 
 ```bash
-docker-compose logs app
+docker compose logs app
 ```
 
 Verify configuration:
 
 ```bash
-docker-compose exec app cat /app/config.yaml
+docker compose exec app cat /app/config.yaml
 ```
 
 ### Health Check Failing
@@ -278,7 +280,7 @@ docker-compose exec app cat /app/config.yaml
 Test health endpoint manually:
 
 ```bash
-docker-compose exec app wget -O- http://localhost:8080/health
+docker compose exec app wget -O- http://localhost:8080/health
 ```
 
 ### Database Connection Issues
@@ -286,8 +288,8 @@ docker-compose exec app wget -O- http://localhost:8080/health
 Check service connectivity:
 
 ```bash
-docker-compose exec app ping postgres
-docker-compose exec app nc -zv postgres 5432
+docker compose exec app ping postgres
+docker compose exec app nc -zv postgres 5432
 ```
 
 ### Performance Issues
@@ -298,7 +300,7 @@ Monitor resource usage:
 docker stats
 ```
 
-Increase resource limits in docker-compose.yaml.
+Increase resource limits in docker compose.yaml.
 
 ## CI/CD Integration
 
@@ -316,12 +318,12 @@ jobs:
       - uses: actions/checkout@v3
 
       - name: Build Docker image
-        run: docker-compose build
+        run: docker compose build
 
       - name: Run integration tests
         run: |
-          docker-compose --profile integration-tests up --abort-on-container-exit
-          docker-compose down -v
+          docker compose --profile integration-tests up --abort-on-container-exit
+          docker compose down -v
 ```
 
 ### GitLab CI
@@ -332,8 +334,8 @@ test:
   services:
     - docker:dind
   script:
-    - docker-compose --profile integration-tests up --build --abort-on-container-exit
-    - docker-compose down -v
+    - docker compose --profile integration-tests up --build --abort-on-container-exit
+    - docker compose down -v
 ```
 
 ## Resources

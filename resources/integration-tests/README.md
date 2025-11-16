@@ -34,13 +34,13 @@ The test suite covers all major features of the gateway:
 Run all integration tests:
 
 ```bash
-docker-compose --profile integration-tests up --abort-on-container-exit
+docker compose --profile integration-tests up --abort-on-container-exit
 ```
 
 Run tests and rebuild the app:
 
 ```bash
-docker-compose --profile integration-tests up --build --abort-on-container-exit
+docker compose --profile integration-tests up --build --abort-on-container-exit
 ```
 
 ### Using Hurl Directly
@@ -155,9 +155,9 @@ Add to your CI/CD pipeline:
 # GitHub Actions example
 - name: Run Integration Tests
   run: |
-    docker-compose --profile integration-tests up --build --abort-on-container-exit
+    docker compose --profile integration-tests up --build --abort-on-container-exit
     exit_code=$?
-    docker-compose down -v
+    docker compose down -v
     exit $exit_code
 ```
 
@@ -167,18 +167,18 @@ Add to your CI/CD pipeline:
 
 1. **Check service health**:
    ```bash
-   docker-compose ps
-   docker-compose logs app
+   docker compose ps
+   docker compose logs app
    ```
 
 2. **Verify configuration**:
    ```bash
-   docker-compose exec app cat /app/config.yaml
+   docker compose exec app cat /app/config.yaml
    ```
 
 3. **Check backend connectivity**:
    ```bash
-   docker-compose exec app curl -v http://mock-backend:1080/health
+   docker compose exec app curl -v http://mock-backend:1080/health
    ```
 
 ### Debugging Tests

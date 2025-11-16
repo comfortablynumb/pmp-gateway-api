@@ -162,30 +162,30 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Start services
-        run: docker-compose --profile integration-tests up -d --build
+        run: docker compose --profile integration-tests up -d --build
         env:
           COMPOSE_INTERACTIVE_NO_CLI: 1
 
       - name: Wait for services to be healthy
         run: |
-          timeout 180 bash -c 'until docker-compose ps | grep -q "app.*healthy"; do echo "Waiting for services..."; sleep 5; done' || (docker-compose logs app && exit 1)
+          timeout 180 bash -c 'until docker compose ps | grep -q "app.*healthy"; do echo "Waiting for services..."; sleep 5; done' || (docker compose logs app && exit 1)
 
       - name: Run Hurl integration tests
-        run: docker-compose run --rm hurl
+        run: docker compose run --rm hurl
         continue-on-error: false
 
       - name: Collect logs on failure
         if: failure()
         run: |
           echo "=== App Logs ==="
-          docker-compose logs app
+          docker compose logs app
           echo "=== PostgreSQL Logs ==="
-          docker-compose logs postgres
+          docker compose logs postgres
           echo "=== Redis Logs ==="
-          docker-compose logs redis
+          docker compose logs redis
           echo "=== Mock Backend Logs ==="
-          docker-compose logs mock-backend
+          docker compose logs mock-backend
 
       - name: Shutdown services
         if: always()
-        run: docker-compose down -v
+        run: docker compose down -v
