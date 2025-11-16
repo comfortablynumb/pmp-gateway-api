@@ -1,0 +1,138 @@
+version: '3.8'
+
+services:
+  # PostgreSQL database
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: testdb
+      POSTGRES_USER: testuser
+      POSTGRES_PASSWORD: testpass
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U testuser"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # MySQL database
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_DATABASE: testdb
+      MYSQL_USER: testuser
+      MYSQL_PASSWORD: testpass
+      MYSQL_ROOT_PASSWORD: rootpass
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "testuser", "-ptestpass"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+  # MongoDB database
+  mongodb:
+    image: mongo:7.0
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: testuser
+      MONGO_INITDB_ROOT_PASSWORD: testpass
+      MONGO_INITDB_DATABASE: testdb
+    ports:
+      - "27017:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - mongodb_data:/data/db
+
+  # Redis cache
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - redis_data:/data
+
+  # Mock backend service for testing
+  mock-backend:
+    image: mockserver/mockserver:5.15.0
+    environment:
+      MOCKSERVER_PROPERTY_FILE: /config/mockserver.properties
+      MOCKSERVER_INITIALIZATION_JSON_PATH: /config/initializerJson.json
+    ports:
+      - "1080:1080"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:1080/mockserver/status"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # PMP Gateway application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    profiles:
+      - app
+      - integration-tests
+    ports:
+      - "8080:8080"
+    environment:
+      RUST_LOG: info
+      CONFIG_PATH: /app/config.yaml
+      DATABASE_URL: postgres://testuser:testpass@postgres:5432/testdb
+      MYSQL_URL: mysql://testuser:testpass@mysql:3306/testdb
+      MONGODB_URL: mongodb://testuser:testpass@mongodb:27017/testdb
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mock-backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+
+  # Hurl integration tests
+  hurl:
+    image: orangeopensource/hurl:1.8.0
+    profiles:
+      - integration-tests
+    depends_on:
+      app:
+        condition: service_healthy
+    volumes:
+      - ./resources/integration-tests:/tests:ro
+    command: ["--test", "--glob", "/tests/**/*.hurl", "--variables-file", "/tests/variables.env"]
+    environment:
+      HURL_BASE_URL: http://app:8080
+
+volumes:
+  postgres_data:
+  mysql_data:
+  mongodb_data:
+  redis_data:
