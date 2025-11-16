@@ -74,11 +74,6 @@ services:
       MOCKSERVER_INITIALIZATION_JSON_PATH: /config/initializerJson.json
     ports:
       - "1080:1080"
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:1080/mockserver/status"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
 
   # PMP Gateway application
   app:
@@ -107,7 +102,7 @@ services:
       redis:
         condition: service_healthy
       mock-backend:
-        condition: service_healthy
+        condition: service_started
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
       interval: 10s
