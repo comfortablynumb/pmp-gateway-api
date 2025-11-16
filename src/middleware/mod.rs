@@ -10,13 +10,9 @@ pub mod tracing;
 pub mod traffic_mirror;
 pub mod websocket;
 
-pub use cache::{create_cache_middleware, CacheConfig, ResponseCache};
 pub use circuit_breaker::{create_circuit_breaker, CircuitBreakerConfig, CircuitBreakerWrapper};
-pub use deduplication::{create_deduplication_middleware, DeduplicationConfig, RequestDeduplicator};
 pub use logging::create_logging_middleware;
 pub use metrics::{init_metrics, metrics_middleware};
 pub use rate_limit::{create_rate_limit_middleware, create_rate_limiter};
 pub use request_id::request_id_middleware;
-pub use tracing::{init_tracing, shutdown_tracing, tracing_middleware, OtelConfig};
-pub use traffic_mirror::{create_traffic_mirror_middleware, traffic_mirror_middleware, TrafficMirror, TrafficMirrorConfig};
-pub use websocket::{websocket_proxy_handler, WebSocketProxyConfig};
+pub use traffic_mirror::TrafficMirrorConfig;

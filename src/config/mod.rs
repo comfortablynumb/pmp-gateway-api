@@ -4,7 +4,7 @@ pub mod traffic_split;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-pub use hot_reload::ConfigHotReload;
+#[allow(unused_imports)]
 pub use traffic_split::{RoutingRule, TrafficSplitConfig, TrafficVariant};
 
 /// Main configuration structure
@@ -617,6 +617,7 @@ impl Config {
     /// Load configuration with environment-specific overrides
     /// Tries to load base config, then overlays environment-specific config
     /// E.g., config.yaml + config.dev.yaml
+    #[allow(dead_code)]
     pub fn from_yaml_with_env(base_path: &str) -> anyhow::Result<Self> {
         // Load base configuration
         let mut config = Self::from_yaml_file(base_path)?;
@@ -637,6 +638,7 @@ impl Config {
     }
 
     /// Merge two configurations, with override taking precedence
+    #[allow(dead_code)]
     fn merge_configs(base: Config, override_cfg: Config) -> Config {
         Config {
             clients: {

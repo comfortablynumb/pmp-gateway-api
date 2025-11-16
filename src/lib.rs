@@ -9,6 +9,6 @@ pub mod health;
 pub mod health_aggregation;
 pub mod interpolation;
 pub mod middleware;
-pub mod routing;
 pub mod routes;
+pub mod routing;
 pub mod transform;

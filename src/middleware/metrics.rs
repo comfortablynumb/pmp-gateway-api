@@ -14,7 +14,9 @@ pub fn init_metrics() -> PrometheusHandle {
     let builder = builder
         .set_buckets_for_metric(
             Matcher::Full("http_request_duration_seconds".to_string()),
-            &[0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0],
+            &[
+                0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
+            ],
         )
         .expect("failed to set buckets");
 
@@ -24,9 +26,15 @@ pub fn init_metrics() -> PrometheusHandle {
 
     // Describe metrics
     describe_counter!("http_requests_total", "Total number of HTTP requests");
-    describe_counter!("http_responses_total", "Total number of HTTP responses by status");
+    describe_counter!(
+        "http_responses_total",
+        "Total number of HTTP responses by status"
+    );
     describe_counter!("http_errors_total", "Total number of HTTP errors");
-    describe_histogram!("http_request_duration_seconds", "HTTP request duration in seconds");
+    describe_histogram!(
+        "http_request_duration_seconds",
+        "HTTP request duration in seconds"
+    );
 
     PROMETHEUS_HANDLE.set(handle.clone()).ok();
     handle
@@ -44,7 +52,8 @@ pub async fn metrics_middleware(request: Request, next: Next) -> Response {
     let path = request.uri().path().to_string();
 
     // Increment request counter
-    counter!("http_requests_total", "method" => method.clone(), "path" => path.clone()).increment(1);
+    counter!("http_requests_total", "method" => method.clone(), "path" => path.clone())
+        .increment(1);
 
     // Call next middleware/handler
     let response = next.run(request).await;
@@ -108,8 +117,17 @@ mod tests {
         let output = handle.render();
 
         // Check that metrics are being tracked
-        assert!(!output.is_empty(), "Metrics output should not be empty after recording");
-        assert!(output.contains("http_requests_total"), "Should contain request counter");
-        assert!(output.contains("http_request_duration_seconds"), "Should contain duration histogram");
+        assert!(
+            !output.is_empty(),
+            "Metrics output should not be empty after recording"
+        );
+        assert!(
+            output.contains("http_requests_total"),
+            "Should contain request counter"
+        );
+        assert!(
+            output.contains("http_request_duration_seconds"),
+            "Should contain duration histogram"
+        );
     }
 }

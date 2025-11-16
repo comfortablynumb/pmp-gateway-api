@@ -1,5 +1,6 @@
+#![allow(dead_code)]
+
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 /// A/B testing and canary deployment configuration
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -50,10 +51,7 @@ pub enum RoutingRule {
         variant: String,
     },
     /// Route based on percentage (0-100)
-    Percentage {
-        variant: String,
-        percentage: u8,
-    },
+    Percentage { variant: String, percentage: u8 },
 }
 
 impl TrafficSplitConfig {

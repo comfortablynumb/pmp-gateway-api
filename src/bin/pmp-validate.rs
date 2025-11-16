@@ -36,7 +36,7 @@ fn main() {
             let mut mongodb_count = 0;
             let mut redis_count = 0;
 
-            for (_, client) in &config.clients {
+            for client in config.clients.values() {
                 match client {
                     pmp_gateway_api::config::ClientConfig::Http(_) => http_count += 1,
                     pmp_gateway_api::config::ClientConfig::Postgres(_) => postgres_count += 1,
@@ -84,7 +84,10 @@ fn main() {
 
             for client_id in config.clients.keys() {
                 if !used_clients.contains(client_id) {
-                    warnings.push(format!("Client '{}' is defined but not used in any route", client_id));
+                    warnings.push(format!(
+                        "Client '{}' is defined but not used in any route",
+                        client_id
+                    ));
                 }
             }
 

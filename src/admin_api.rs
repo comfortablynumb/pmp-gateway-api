@@ -86,7 +86,7 @@ async fn get_current_config(State(state): State<AdminState>) -> Json<Config> {
 }
 
 /// Reload configuration
-async fn reload_config(State(state): State<AdminState>) -> (StatusCode, Json<ReloadResponse>) {
+async fn reload_config(State(_state): State<AdminState>) -> (StatusCode, Json<ReloadResponse>) {
     info!("Admin API: Configuration reload requested");
 
     // In a real implementation, this would reload from file
@@ -95,7 +95,8 @@ async fn reload_config(State(state): State<AdminState>) -> (StatusCode, Json<Rel
         StatusCode::OK,
         Json(ReloadResponse {
             success: true,
-            message: "Configuration reload triggered (hot reload via file watch is active)".to_string(),
+            message: "Configuration reload triggered (hot reload via file watch is active)"
+                .to_string(),
         }),
     )
 }

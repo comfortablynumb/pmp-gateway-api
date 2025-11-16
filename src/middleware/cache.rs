@@ -1,10 +1,6 @@
-use axum::{
-    body::Body,
-    extract::Request,
-    http::HeaderValue,
-    middleware::Next,
-    response::{IntoResponse, Response},
-};
+#![allow(dead_code)]
+
+use axum::{body::Body, extract::Request, http::HeaderValue, middleware::Next, response::Response};
 use moka::future::Cache;
 use std::sync::Arc;
 use std::time::Duration;
@@ -82,11 +78,7 @@ pub fn create_cache_middleware(
 }
 
 /// Cache middleware handler
-async fn cache_middleware(
-    cache: Arc<ResponseCache>,
-    request: Request,
-    next: Next,
-) -> Response {
+async fn cache_middleware(cache: Arc<ResponseCache>, request: Request, next: Next) -> Response {
     let method = request.method().to_string();
     let path = request.uri().path().to_string();
 

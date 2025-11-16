@@ -46,7 +46,9 @@ pub fn create_circuit_breaker(config: CircuitBreakerConfig) -> Arc<CircuitBreake
     let failure_policy =
         consecutive_failures(config.failure_threshold, backoff::constant(config.timeout));
 
-    let cb = failsafe::Config::new().failure_policy(failure_policy).build();
+    let cb = failsafe::Config::new()
+        .failure_policy(failure_policy)
+        .build();
 
     Arc::new(CircuitBreakerWrapper { inner: cb })
 }

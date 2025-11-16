@@ -1,9 +1,6 @@
-use axum::{
-    body::Body,
-    extract::Request,
-    middleware::Next,
-    response::Response,
-};
+#![allow(dead_code)]
+
+use axum::{extract::Request, middleware::Next, response::Response};
 use opentelemetry::{
     global,
     trace::{Span, SpanKind, Status, Tracer},
@@ -44,7 +41,10 @@ pub fn init_tracing(config: &OtelConfig) -> Result<(), Box<dyn std::error::Error
         return Ok(());
     }
 
-    info!("Initializing OpenTelemetry tracing with service: {}", config.service_name);
+    info!(
+        "Initializing OpenTelemetry tracing with service: {}",
+        config.service_name
+    );
 
     // Create resource with service name
     let resource = Resource::new(vec![KeyValue::new(

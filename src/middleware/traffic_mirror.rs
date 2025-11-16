@@ -1,5 +1,6 @@
+#![allow(dead_code)]
+
 use axum::{
-    body::Body,
     extract::{Request, State},
     middleware::Next,
     response::Response,
@@ -88,14 +89,18 @@ impl TrafficMirror {
             .filter_map(|(name, value)| {
                 let name_str = name.as_str();
                 if name_str != "host" && name_str != "content-length" {
-                    value.to_str().ok().map(|v| (name_str.to_string(), v.to_string()))
+                    value
+                        .to_str()
+                        .ok()
+                        .map(|v| (name_str.to_string(), v.to_string()))
                 } else {
                     None
                 }
             })
             .collect();
 
-        self.send_mirror_request(method_str, path, query, headers).await;
+        self.send_mirror_request(method_str, path, query, headers)
+            .await;
     }
 
     /// Send mirror request with primitive types
@@ -147,7 +152,9 @@ impl TrafficMirror {
             Ok(resp) => {
                 debug!(
                     "Mirror request completed: {} {} -> {}",
-                    method_str, path, resp.status()
+                    method_str,
+                    path,
+                    resp.status()
                 );
             }
             Err(e) => {
@@ -159,9 +166,8 @@ impl TrafficMirror {
 
 /// Simple hash function for consistent sampling
 fn simple_hash(s: &str) -> u32 {
-    s.bytes().fold(0u32, |acc, b| {
-        acc.wrapping_mul(31).wrapping_add(b as u32)
-    })
+    s.bytes()
+        .fold(0u32, |acc, b| acc.wrapping_mul(31).wrapping_add(b as u32))
 }
 
 /// Create traffic mirroring middleware
@@ -191,7 +197,10 @@ pub async fn traffic_mirror_middleware(
             .filter_map(|(name, value)| {
                 let name_str = name.as_str();
                 if name_str != "host" && name_str != "content-length" {
-                    value.to_str().ok().map(|v| (name_str.to_string(), v.to_string()))
+                    value
+                        .to_str()
+                        .ok()
+                        .map(|v| (name_str.to_string(), v.to_string()))
                 } else {
                     None
                 }
@@ -200,12 +209,16 @@ pub async fn traffic_mirror_middleware(
 
         if mirror.config.blocking {
             // Wait for mirror request (rare, usually for testing)
-            mirror.send_mirror_request(method_str, path, query, headers).await;
+            mirror
+                .send_mirror_request(method_str, path, query, headers)
+                .await;
         } else {
             // Fire and forget (common case)
             let mirror_clone = mirror.clone();
             tokio::spawn(async move {
-                mirror_clone.send_mirror_request(method_str, path, query, headers).await;
+                mirror_clone
+                    .send_mirror_request(method_str, path, query, headers)
+                    .await;
             });
         }
     }
@@ -217,7 +230,7 @@ pub async fn traffic_mirror_middleware(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::http::{Method, Uri};
+    use axum::{body::Body, http::Method};
 
     #[test]
     fn test_config_validation() {

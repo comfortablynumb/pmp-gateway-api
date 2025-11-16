@@ -1,13 +1,11 @@
-use axum::{
-    body::Body,
-    extract::Request,
-    middleware::Next,
-    response::{IntoResponse, Response},
-};
+#![allow(dead_code)]
+#![allow(private_interfaces)]
+
+use axum::{body::Body, extract::Request, middleware::Next, response::Response};
 use moka::future::Cache;
 use std::sync::Arc;
 use std::time::Duration;
-use tracing::{debug, warn};
+use tracing::debug;
 
 /// Deduplication configuration
 #[derive(Debug, Clone)]
@@ -37,10 +35,10 @@ pub(crate) struct DeduplicationKey {
 
 /// Cached response for deduplicated requests
 #[derive(Debug, Clone)]
-struct CachedResult {
-    status: u16,
-    headers: Vec<(String, String)>,
-    body: bytes::Bytes,
+pub(crate) struct CachedResult {
+    pub(crate) status: u16,
+    pub(crate) headers: Vec<(String, String)>,
+    pub(crate) body: bytes::Bytes,
 }
 
 /// Request deduplication middleware
@@ -136,11 +134,7 @@ async fn deduplication_middleware(
 
     // Check if we have a cached response
     if let Some(cached) = dedup.cache.get(&dedup_key).await {
-        debug!(
-            "Request deduplicated: {} {}",
-            request_method,
-            request_path
-        );
+        debug!("Request deduplicated: {} {}", request_method, request_path);
 
         // Build response from cache
         let mut response = Response::builder()

@@ -1,7 +1,5 @@
 use crate::config::{RoutingRule, TrafficSplitConfig, TrafficVariant};
 use axum::extract::Request;
-use axum::http::HeaderMap;
-use std::collections::HashMap;
 use tracing::debug;
 
 /// Traffic selector for A/B testing and canary deployments
@@ -17,10 +15,19 @@ impl TrafficSelector {
     }
 
     /// Select a variant based on request properties
-    pub fn select_variant(&self, request: &Request, sticky_cookie: Option<&str>) -> &TrafficVariant {
+    pub fn select_variant(
+        &self,
+        request: &Request,
+        sticky_cookie: Option<&str>,
+    ) -> &TrafficVariant {
         // Check if there's a sticky cookie
         if let Some(cookie_variant) = sticky_cookie {
-            if let Some(variant) = self.config.variants.iter().find(|v| v.name == cookie_variant) {
+            if let Some(variant) = self
+                .config
+                .variants
+                .iter()
+                .find(|v| v.name == cookie_variant)
+            {
                 debug!("Using sticky variant from cookie: {}", cookie_variant);
                 return variant;
             }
@@ -41,14 +48,22 @@ impl TrafficSelector {
     /// Check a routing rule
     fn check_rule(&self, rule: &RoutingRule, request: &Request) -> Option<&TrafficVariant> {
         match rule {
-            RoutingRule::Header { name, value, variant } => {
+            RoutingRule::Header {
+                name,
+                value,
+                variant,
+            } => {
                 if let Some(header_value) = request.headers().get(name) {
                     if header_value.to_str().ok()? == value {
                         return self.find_variant(variant);
                     }
                 }
             }
-            RoutingRule::Cookie { name, value, variant } => {
+            RoutingRule::Cookie {
+                name,
+                value,
+                variant,
+            } => {
                 if let Some(cookie_header) = request.headers().get("cookie") {
                     if let Ok(cookie_str) = cookie_header.to_str() {
                         if parse_cookie(cookie_str, name) == Some(value.as_str()) {
@@ -57,7 +72,11 @@ impl TrafficSelector {
                     }
                 }
             }
-            RoutingRule::Query { name, value, variant } => {
+            RoutingRule::Query {
+                name,
+                value,
+                variant,
+            } => {
                 if let Some(query) = request.uri().query() {
                     if parse_query_param(query, name) == Some(value.as_str()) {
                         return self.find_variant(variant);
@@ -82,7 +101,10 @@ impl TrafficSelector {
         for variant in &self.config.variants {
             cumulative += variant.weight as u32;
             if bucket < cumulative {
-                debug!("Selected variant '{}' (bucket: {}, weight: {})", variant.name, bucket, variant.weight);
+                debug!(
+                    "Selected variant '{}' (bucket: {}, weight: {})",
+                    variant.name, bucket, variant.weight
+                );
                 return variant;
             }
         }
@@ -104,9 +126,8 @@ impl TrafficSelector {
 
 /// Simple hash function for consistent variant selection
 fn simple_hash(s: &str) -> u32 {
-    s.bytes().fold(0u32, |acc, b| {
-        acc.wrapping_mul(31).wrapping_add(b as u32)
-    })
+    s.bytes()
+        .fold(0u32, |acc, b| acc.wrapping_mul(31).wrapping_add(b as u32))
 }
 
 /// Parse a cookie value
@@ -138,7 +159,7 @@ fn parse_query_param<'a>(query: &'a str, name: &str) -> Option<&'a str> {
 mod tests {
     use super::*;
     use axum::body::Body;
-    use axum::http::{Method, Uri};
+    use axum::http::Method;
 
     #[test]
     fn test_simple_hash_consistency() {

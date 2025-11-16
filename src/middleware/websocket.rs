@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use axum::{
     extract::ws::{Message as AxumMessage, WebSocket, WebSocketUpgrade},
     response::Response,
@@ -39,7 +41,10 @@ pub async fn websocket_proxy_handler(
 
 /// Proxy WebSocket connection to backend
 async fn websocket_proxy(client_socket: WebSocket, config: Arc<WebSocketProxyConfig>) {
-    info!("WebSocket connection established, proxying to {}", config.backend_url);
+    info!(
+        "WebSocket connection established, proxying to {}",
+        config.backend_url
+    );
 
     // Connect to backend WebSocket
     let backend_result = connect_async(&config.backend_url).await;
@@ -138,7 +143,10 @@ fn convert_axum_to_tungstenite(msg: AxumMessage) -> Option<TungsteniteMessage> {
             if let Some(frame) = frame {
                 Some(TungsteniteMessage::Close(Some(
                     tokio_tungstenite::tungstenite::protocol::CloseFrame {
-                        code: tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode::from(frame.code),
+                        code:
+                            tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode::from(
+                                frame.code,
+                            ),
                         reason: frame.reason,
                     },
                 )))
@@ -192,7 +200,10 @@ mod tests {
     fn test_convert_axum_binary_message() {
         let axum_msg = AxumMessage::Binary(vec![1, 2, 3]);
         let tungstenite_msg = convert_axum_to_tungstenite(axum_msg);
-        assert!(matches!(tungstenite_msg, Some(TungsteniteMessage::Binary(_))));
+        assert!(matches!(
+            tungstenite_msg,
+            Some(TungsteniteMessage::Binary(_))
+        ));
     }
 
     #[test]

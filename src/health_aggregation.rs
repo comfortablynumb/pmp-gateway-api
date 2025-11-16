@@ -2,9 +2,19 @@ use axum::{http::StatusCode, response::Json};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use tokio::sync::RwLock;
 use tracing::{debug, error};
+
+/// Type alias for health check function
+type HealthCheckFn = Arc<
+    dyn Fn(
+            String,
+        )
+            -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Duration, String>> + Send>>
+        + Send
+        + Sync,
+>;
 
 /// Health check status
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -147,7 +157,7 @@ impl HealthCheckManager {
     pub fn start_health_checks(
         self: Arc<Self>,
         config: HealthCheckConfig,
-        check_fn: Arc<dyn Fn(String) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Duration, String>> + Send>> + Send + Sync>,
+        check_fn: HealthCheckFn,
     ) {
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(config.interval);
@@ -245,7 +255,12 @@ mod tests {
         manager.register_backend("backend1".to_string()).await;
 
         manager
-            .update_backend_health("backend1", HealthStatus::Unhealthy, 0, Some("Connection failed".to_string()))
+            .update_backend_health(
+                "backend1",
+                HealthStatus::Unhealthy,
+                0,
+                Some("Connection failed".to_string()),
+            )
             .await;
 
         let health = manager.get_aggregated_health().await;
@@ -260,7 +275,12 @@ mod tests {
         manager.register_backend("backend2".to_string()).await;
 
         manager
-            .update_backend_health("backend2", HealthStatus::Unhealthy, 0, Some("Error".to_string()))
+            .update_backend_health(
+                "backend2",
+                HealthStatus::Unhealthy,
+                0,
+                Some("Error".to_string()),
+            )
             .await;
 
         let health = manager.get_aggregated_health().await;

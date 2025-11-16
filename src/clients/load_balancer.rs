@@ -71,6 +71,7 @@ impl LoadBalancer {
     }
 
     /// Increment connection count for a backend
+    #[allow(dead_code)]
     pub fn increment_connections(&self, index: usize) {
         if let Some(count) = self.connection_counts.get(index) {
             count.fetch_add(1, Ordering::Relaxed);
@@ -78,6 +79,7 @@ impl LoadBalancer {
     }
 
     /// Decrement connection count for a backend
+    #[allow(dead_code)]
     pub fn decrement_connections(&self, index: usize) {
         if let Some(count) = self.connection_counts.get(index) {
             count.fetch_sub(1, Ordering::Relaxed);
@@ -85,6 +87,7 @@ impl LoadBalancer {
     }
 
     /// Get the index of a backend URL
+    #[allow(dead_code)]
     pub fn get_backend_index(&self, url: &str) -> Option<usize> {
         self.backends.iter().position(|b| b == url)
     }
