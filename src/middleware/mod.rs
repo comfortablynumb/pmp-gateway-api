@@ -6,6 +6,8 @@ pub mod metrics;
 pub mod rate_limit;
 pub mod request_id;
 pub mod security;
+pub mod tracing;
+pub mod websocket;
 
 pub use cache::{create_cache_middleware, CacheConfig, ResponseCache};
 pub use circuit_breaker::{create_circuit_breaker, CircuitBreakerConfig, CircuitBreakerWrapper};
@@ -14,3 +16,5 @@ pub use logging::create_logging_middleware;
 pub use metrics::{init_metrics, metrics_middleware};
 pub use rate_limit::{create_rate_limit_middleware, create_rate_limiter};
 pub use request_id::request_id_middleware;
+pub use tracing::{init_tracing, shutdown_tracing, tracing_middleware, OtelConfig};
+pub use websocket::{websocket_proxy_handler, WebSocketProxyConfig};

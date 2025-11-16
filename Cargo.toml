@@ -5,12 +5,16 @@ edition = "2021"
 
 [dependencies]
 # Web server
-axum = "0.7"
+axum = { version = "0.7", features = ["ws"] }
 tower = "0.4"
 tower-http = { version = "0.5", features = ["trace", "cors", "limit", "timeout", "request-id", "compression-gzip", "compression-br", "decompression-gzip", "decompression-br"] }
 
 # HTTP client
 reqwest = { version = "0.11", features = ["json"] }
+
+# WebSocket
+tokio-tungstenite = "0.21"
+futures-util = "0.3"
 
 # Async runtime
 tokio = { version = "1", features = ["full"] }
