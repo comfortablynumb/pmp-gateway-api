@@ -38,6 +38,7 @@ regex = "1.10"
 uuid = { version = "1.10", features = ["v4", "serde"] }
 notify = "6.1"  # File watching for hot reload
 rand = "0.8"  # Random selection for load balancing
+chrono = { version = "0.4", features = ["serde"] }  # Timestamps
 
 # Metrics
 metrics = "0.22"

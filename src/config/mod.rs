@@ -384,6 +384,9 @@ pub struct RouteConfig {
     /// Traffic split configuration for A/B testing or canary deployments
     #[serde(default)]
     pub traffic_split: Option<TrafficSplitConfig>,
+    /// Traffic mirroring configuration for testing
+    #[serde(default)]
+    pub traffic_mirror: Option<crate::middleware::TrafficMirrorConfig>,
 }
 
 /// Execution mode for subrequests
@@ -609,6 +612,51 @@ impl Config {
         let interpolated = crate::env_interpolation::interpolate_yaml_string(&content);
         let config: Config = serde_yaml::from_str(&interpolated)?;
         Ok(config)
+    }
+
+    /// Load configuration with environment-specific overrides
+    /// Tries to load base config, then overlays environment-specific config
+    /// E.g., config.yaml + config.dev.yaml
+    pub fn from_yaml_with_env(base_path: &str) -> anyhow::Result<Self> {
+        // Load base configuration
+        let mut config = Self::from_yaml_file(base_path)?;
+
+        // Check for environment-specific config
+        if let Ok(env) = std::env::var("ENV") {
+            let env_path = base_path.replace(".yaml", &format!(".{}.yaml", env));
+            if std::path::Path::new(&env_path).exists() {
+                tracing::info!("Loading environment-specific config: {}", env_path);
+                let env_config = Self::from_yaml_file(&env_path)?;
+                // Merge configs - environment config takes precedence
+                config = Self::merge_configs(config, env_config);
+            }
+        }
+
+        config.validate()?;
+        Ok(config)
+    }
+
+    /// Merge two configurations, with override taking precedence
+    fn merge_configs(base: Config, override_cfg: Config) -> Config {
+        Config {
+            clients: {
+                let mut merged = base.clients;
+                merged.extend(override_cfg.clients);
+                merged
+            },
+            routes: if override_cfg.routes.is_empty() {
+                base.routes
+            } else {
+                override_cfg.routes
+            },
+            server: if override_cfg.server.cors.is_some()
+                || override_cfg.server.rate_limit.is_some()
+            {
+                override_cfg.server
+            } else {
+                base.server
+            },
+        }
     }
 
     /// Validate configuration
