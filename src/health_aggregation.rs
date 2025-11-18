@@ -7,6 +7,7 @@ use tokio::sync::RwLock;
 use tracing::{debug, error};
 
 /// Type alias for health check function
+#[allow(dead_code)]
 type HealthCheckFn = Arc<
     dyn Fn(
             String,
@@ -57,6 +58,7 @@ pub struct AggregatedHealth {
 }
 
 /// Health checker configuration
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct HealthCheckConfig {
     /// Health check interval in seconds
@@ -91,6 +93,7 @@ impl HealthCheckManager {
     }
 
     /// Register a backend for health checking
+    #[allow(dead_code)]
     pub async fn register_backend(&self, backend_id: String) {
         let mut backends = self.backends.write().await;
         backends.insert(
@@ -106,6 +109,7 @@ impl HealthCheckManager {
     }
 
     /// Update backend health status
+    #[allow(dead_code)]
     pub async fn update_backend_health(
         &self,
         backend_id: &str,
@@ -154,6 +158,7 @@ impl HealthCheckManager {
     }
 
     /// Start background health checking
+    #[allow(dead_code)]
     pub fn start_health_checks(
         self: Arc<Self>,
         config: HealthCheckConfig,
@@ -213,6 +218,7 @@ impl Default for HealthCheckManager {
 }
 
 /// Health check endpoint handler
+#[allow(dead_code)]
 pub async fn health_check_handler(
     manager: Arc<HealthCheckManager>,
 ) -> (StatusCode, Json<AggregatedHealth>) {
