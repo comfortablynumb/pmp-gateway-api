@@ -115,7 +115,7 @@ services:
 
   # Hurl integration tests
   hurl:
-    image: orangeopensource/hurl:5.0.1
+    image: ghcr.io/orange-opensource/hurl:7.0.0
     profiles:
       - integration-tests
     depends_on:
