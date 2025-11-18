@@ -1,15 +1,32 @@
-use crate::config::HttpClientConfig;
+use crate::clients::LoadBalancer;
+use crate::config::{HttpClientConfig, LoadBalanceStrategy};
+use crate::middleware::{create_circuit_breaker, CircuitBreakerConfig, CircuitBreakerWrapper};
 use anyhow::Result;
 use reqwest::{Client, Method};
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Duration;
-use tracing::debug;
+use tracing::{debug, warn};
 
-/// HTTP client with connection pooling
-#[derive(Debug, Clone)]
+/// HTTP client with connection pooling, circuit breaker, and load balancing
+#[derive(Clone)]
 pub struct HttpClient {
     config: HttpClientConfig,
     client: Client,
+    circuit_breaker: Option<Arc<CircuitBreakerWrapper>>,
+    load_balancer: Option<LoadBalancer>,
+}
+
+// Manual Debug implementation to handle CircuitBreaker
+impl std::fmt::Debug for HttpClient {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("HttpClient")
+            .field("config", &self.config)
+            .field("client", &self.client)
+            .field("circuit_breaker", &self.circuit_breaker.is_some())
+            .field("load_balancer", &self.load_balancer.is_some())
+            .finish()
+    }
 }
 
 impl HttpClient {
@@ -20,10 +37,34 @@ impl HttpClient {
             .timeout(Duration::from_secs(config.timeout))
             .build()?;
 
-        Ok(Self { config, client })
+        // Initialize circuit breaker if configured
+        let circuit_breaker = config.circuit_breaker.as_ref().map(|cb_config| {
+            create_circuit_breaker(CircuitBreakerConfig {
+                failure_threshold: cb_config.failure_threshold,
+                timeout: Duration::from_secs(cb_config.timeout_seconds),
+            })
+        });
+
+        // Initialize load balancer if multiple backends configured
+        let load_balancer = if !config.backends.is_empty() {
+            let strategy = config
+                .load_balance
+                .clone()
+                .unwrap_or(LoadBalanceStrategy::RoundRobin);
+            Some(LoadBalancer::new(config.backends.clone(), strategy))
+        } else {
+            None
+        };
+
+        Ok(Self {
+            config,
+            client,
+            circuit_breaker,
+            load_balancer,
+        })
     }
 
-    /// Execute an HTTP request with retry logic
+    /// Execute an HTTP request with retry logic and circuit breaker
     pub async fn execute_request(
         &self,
         method: &str,
@@ -32,7 +73,23 @@ impl HttpClient {
         body: Option<String>,
         query_params: HashMap<String, String>,
     ) -> Result<HttpResponse> {
-        let url = format!("{}{}", self.config.base_url, uri);
+        // Check circuit breaker before attempting request
+        if let Some(ref cb) = self.circuit_breaker {
+            if !cb.is_call_permitted() {
+                warn!("Circuit breaker is open, rejecting request to {}", uri);
+                return Err(anyhow::anyhow!("Circuit breaker is open"));
+            }
+        }
+
+        // Select backend URL using load balancer if available
+        let base_url = if let Some(ref lb) = self.load_balancer {
+            lb.select_backend()
+                .ok_or_else(|| anyhow::anyhow!("No available backends"))?
+        } else {
+            self.config.base_url.clone()
+        };
+
+        let url = format!("{}{}", base_url, uri);
         let method_obj = Method::from_bytes(method.as_bytes())?;
 
         debug!(
@@ -107,6 +164,11 @@ impl HttpClient {
                         body.len()
                     );
 
+                    // Record success with circuit breaker
+                    if let Some(ref cb) = self.circuit_breaker {
+                        let _ = cb.call(|| Ok::<(), ()>(()));
+                    }
+
                     return Ok(HttpResponse {
                         status,
                         headers,
@@ -130,6 +192,11 @@ impl HttpClient {
                     tokio::time::sleep(Duration::from_millis(backoff)).await;
                 }
             }
+        }
+
+        // Record failure with circuit breaker
+        if let Some(ref cb) = self.circuit_breaker {
+            let _ = cb.call(|| Err::<(), ()>(()));
         }
 
         Err(last_error.unwrap().into())
@@ -165,15 +232,40 @@ mod tests {
     fn test_http_client_creation() {
         let config = HttpClientConfig {
             base_url: "https://api.example.com".to_string(),
+            backends: vec![],
+            load_balance: None,
             headers: HashMap::new(),
             min_connections: 1,
             max_connections: 10,
             timeout: 30,
             retry: None,
+            circuit_breaker: None,
         };
 
         let client = HttpClient::new(config);
         assert!(client.is_ok());
+    }
+
+    #[test]
+    fn test_http_client_with_load_balancing() {
+        let config = HttpClientConfig {
+            base_url: String::new(),
+            backends: vec![
+                "https://backend1.example.com".to_string(),
+                "https://backend2.example.com".to_string(),
+            ],
+            load_balance: Some(LoadBalanceStrategy::RoundRobin),
+            headers: HashMap::new(),
+            min_connections: 1,
+            max_connections: 10,
+            timeout: 30,
+            retry: None,
+            circuit_breaker: None,
+        };
+
+        let client = HttpClient::new(config);
+        assert!(client.is_ok());
+        assert!(client.unwrap().load_balancer.is_some());
     }
 
     #[test]

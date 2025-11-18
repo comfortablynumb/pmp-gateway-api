@@ -1,21 +1,27 @@
+mod admin_api;
 mod clients;
 mod conditions;
 mod config;
 mod env_interpolation;
 mod health;
+mod health_aggregation;
 mod interpolation;
 mod middleware;
 mod routes;
 mod transform;
 
+use admin_api::{create_admin_router, AdminState};
 use anyhow::Result;
 use axum::http::Method;
 use clients::ClientManager;
 use config::Config;
+use health_aggregation::HealthCheckManager;
 use routes::{build_router, handler::AppState};
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::RwLock;
 use tower_http::{
+    compression::CompressionLayer,
     cors::{Any, CorsLayer},
     limit::RequestBodyLimitLayer,
     timeout::TimeoutLayer,
@@ -37,6 +43,10 @@ async fn main() -> Result<()> {
 
     info!("Starting PMP Gateway API");
 
+    // Initialize Prometheus metrics
+    middleware::init_metrics();
+    info!("Initialized Prometheus metrics exporter");
+
     // Load configuration
     let config_path = std::env::var("CONFIG_PATH").unwrap_or_else(|_| "config.yaml".to_string());
     info!("Loading configuration from: {}", config_path);
@@ -54,14 +64,28 @@ async fn main() -> Result<()> {
     let client_manager = ClientManager::from_config(&config).await?;
     info!("Initialized client manager");
 
+    // Initialize health check manager
+    let health_manager = Arc::new(HealthCheckManager::new());
+    info!("Initialized health check manager");
+
     // Create application state
     let state = AppState {
         config: Arc::new(config.clone()),
         client_manager: Arc::new(client_manager),
     };
 
-    // Build router
-    let mut app = build_router(state);
+    // Create admin state (with RwLock for config reload)
+    let admin_state = AdminState {
+        config: Arc::new(RwLock::new(config.clone())),
+        health_manager: health_manager.clone(),
+    };
+
+    // Build routers
+    let main_router = build_router(state);
+    let admin_router = create_admin_router(admin_state);
+
+    // Merge routers
+    let mut app = main_router.merge(admin_router);
 
     // Apply CORS if configured
     if let Some(ref cors_config) = config.server.cors {
@@ -150,6 +174,10 @@ async fn main() -> Result<()> {
         middleware::create_logging_middleware(config.server.logging.clone()),
     ));
 
+    // Apply compression (gzip and brotli)
+    info!("Enabling response compression (gzip, brotli)");
+    app = app.layer(CompressionLayer::new());
+
     // Apply core middlewares
     app = app
         .layer(axum::middleware::from_fn(middleware::request_id_middleware))
@@ -163,9 +191,45 @@ async fn main() -> Result<()> {
 
     info!("Starting server on {}", bind_addr);
 
-    // Start server
+    // Start server with graceful shutdown
     let listener = tokio::net::TcpListener::bind(&bind_addr).await?;
-    axum::serve(listener, app).await?;
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal())
+        .await?;
 
+    info!("Server stopped gracefully");
     Ok(())
+}
+
+/// Handle shutdown signals for graceful termination
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl+C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("failed to install SIGTERM handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {
+            tracing::info!("Received Ctrl+C signal, shutting down gracefully");
+        },
+        _ = terminate => {
+            tracing::info!("Received SIGTERM signal, shutting down gracefully");
+        },
+    }
+
+    // Give connections time to finish
+    tracing::info!("Draining connections...");
+    tokio::time::sleep(Duration::from_secs(1)).await;
 }

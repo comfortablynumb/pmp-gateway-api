@@ -1,4 +1,5 @@
 pub mod http;
+pub mod load_balancer;
 pub mod mongodb;
 pub mod redis_client;
 pub mod sql;
@@ -8,6 +9,7 @@ use anyhow::Result;
 use std::collections::HashMap;
 
 pub use http::HttpClient;
+pub use load_balancer::LoadBalancer;
 pub use mongodb::MongodbClient;
 pub use redis_client::RedisClient;
 pub use sql::SqlClient;

@@ -1,5 +1,11 @@
+pub mod hot_reload;
+pub mod traffic_split;
+
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+
+#[allow(unused_imports)]
+pub use traffic_split::{RoutingRule, TrafficSplitConfig, TrafficVariant};
 
 /// Main configuration structure
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -203,8 +209,15 @@ pub enum ClientConfig {
 /// HTTP client configuration
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct HttpClientConfig {
-    /// Base URL for the HTTP client
+    /// Base URL for the HTTP client (if using a single backend)
+    #[serde(default)]
     pub base_url: String,
+    /// Multiple backend URLs (for load balancing)
+    #[serde(default)]
+    pub backends: Vec<String>,
+    /// Load balancing strategy
+    #[serde(default)]
+    pub load_balance: Option<LoadBalanceStrategy>,
     /// Default headers to include in all requests
     #[serde(default)]
     pub headers: HashMap<String, String>,
@@ -220,6 +233,18 @@ pub struct HttpClientConfig {
     /// Retry configuration
     #[serde(default)]
     pub retry: Option<RetryConfig>,
+    /// Circuit breaker configuration
+    #[serde(default)]
+    pub circuit_breaker: Option<CircuitBreakerConfigYaml>,
+}
+
+/// Load balancing strategy
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum LoadBalanceStrategy {
+    RoundRobin,
+    Random,
+    LeastConnections,
 }
 
 /// Retry configuration
@@ -246,6 +271,25 @@ fn default_initial_backoff() -> u64 {
 
 fn default_max_backoff() -> u64 {
     5000
+}
+
+/// Circuit breaker configuration for YAML
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct CircuitBreakerConfigYaml {
+    /// Number of consecutive failures before opening the circuit
+    #[serde(default = "default_failure_threshold")]
+    pub failure_threshold: u32,
+    /// Timeout in seconds before attempting to close the circuit
+    #[serde(default = "default_circuit_timeout")]
+    pub timeout_seconds: u64,
+}
+
+fn default_failure_threshold() -> u32 {
+    5
+}
+
+fn default_circuit_timeout() -> u64 {
+    30
 }
 
 /// PostgreSQL client configuration
@@ -337,6 +381,12 @@ pub struct RouteConfig {
     /// Execution mode: sequential or parallel (default: parallel)
     #[serde(default = "default_execution_mode")]
     pub execution_mode: ExecutionMode,
+    /// Traffic split configuration for A/B testing or canary deployments
+    #[serde(default)]
+    pub traffic_split: Option<TrafficSplitConfig>,
+    /// Traffic mirroring configuration for testing
+    #[serde(default)]
+    pub traffic_mirror: Option<crate::middleware::TrafficMirrorConfig>,
 }
 
 /// Execution mode for subrequests
@@ -562,6 +612,53 @@ impl Config {
         let interpolated = crate::env_interpolation::interpolate_yaml_string(&content);
         let config: Config = serde_yaml::from_str(&interpolated)?;
         Ok(config)
+    }
+
+    /// Load configuration with environment-specific overrides
+    /// Tries to load base config, then overlays environment-specific config
+    /// E.g., config.yaml + config.dev.yaml
+    #[allow(dead_code)]
+    pub fn from_yaml_with_env(base_path: &str) -> anyhow::Result<Self> {
+        // Load base configuration
+        let mut config = Self::from_yaml_file(base_path)?;
+
+        // Check for environment-specific config
+        if let Ok(env) = std::env::var("ENV") {
+            let env_path = base_path.replace(".yaml", &format!(".{}.yaml", env));
+            if std::path::Path::new(&env_path).exists() {
+                tracing::info!("Loading environment-specific config: {}", env_path);
+                let env_config = Self::from_yaml_file(&env_path)?;
+                // Merge configs - environment config takes precedence
+                config = Self::merge_configs(config, env_config);
+            }
+        }
+
+        config.validate()?;
+        Ok(config)
+    }
+
+    /// Merge two configurations, with override taking precedence
+    #[allow(dead_code)]
+    fn merge_configs(base: Config, override_cfg: Config) -> Config {
+        Config {
+            clients: {
+                let mut merged = base.clients;
+                merged.extend(override_cfg.clients);
+                merged
+            },
+            routes: if override_cfg.routes.is_empty() {
+                base.routes
+            } else {
+                override_cfg.routes
+            },
+            server: if override_cfg.server.cors.is_some()
+                || override_cfg.server.rate_limit.is_some()
+            {
+                override_cfg.server
+            } else {
+                base.server
+            },
+        }
     }
 
     /// Validate configuration
