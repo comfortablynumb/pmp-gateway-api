@@ -68,12 +68,14 @@ services:
 
   # Mock backend service for testing
   mock-backend:
-    image: mockserver/mockserver:5.15.0
+    image: ironedge/pmp-mock-http
     environment:
-      MOCKSERVER_PROPERTY_FILE: /config/mockserver.properties
-      MOCKSERVER_INITIALIZATION_JSON_PATH: /config/initializerJson.json
+      PORT: "1080"
+      UI_PORT: "8081"
+      MOCKS_DIR: /mocks
     ports:
       - "1080:1080"
+      - "8081:8081"
 
   # PMP Gateway application
   app:
