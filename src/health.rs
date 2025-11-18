@@ -7,7 +7,14 @@ use serde_json::json;
 
 /// Health check endpoint - returns OK if server is running
 pub async fn health_check() -> Response {
-    (StatusCode::OK, Json(json!({"status": "ok"}))).into_response()
+    (
+        StatusCode::OK,
+        Json(json!({
+            "status": "healthy",
+            "timestamp": chrono::Utc::now().to_rfc3339()
+        })),
+    )
+        .into_response()
 }
 
 /// Readiness check endpoint - returns OK if server is ready to accept traffic
