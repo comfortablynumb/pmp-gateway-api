@@ -1,20 +1,25 @@
+mod admin_api;
 mod clients;
 mod conditions;
 mod config;
 mod env_interpolation;
 mod health;
+mod health_aggregation;
 mod interpolation;
 mod middleware;
 mod routes;
 mod transform;
 
+use admin_api::{AdminState, create_admin_router};
 use anyhow::Result;
 use axum::http::Method;
 use clients::ClientManager;
 use config::Config;
+use health_aggregation::HealthCheckManager;
 use routes::{build_router, handler::AppState};
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::RwLock;
 use tower_http::{
     compression::CompressionLayer,
     cors::{Any, CorsLayer},
@@ -59,14 +64,28 @@ async fn main() -> Result<()> {
     let client_manager = ClientManager::from_config(&config).await?;
     info!("Initialized client manager");
 
+    // Initialize health check manager
+    let health_manager = Arc::new(HealthCheckManager::new());
+    info!("Initialized health check manager");
+
     // Create application state
     let state = AppState {
         config: Arc::new(config.clone()),
         client_manager: Arc::new(client_manager),
     };
 
-    // Build router
-    let mut app = build_router(state);
+    // Create admin state (with RwLock for config reload)
+    let admin_state = AdminState {
+        config: Arc::new(RwLock::new(config.clone())),
+        health_manager: health_manager.clone(),
+    };
+
+    // Build routers
+    let main_router = build_router(state);
+    let admin_router = create_admin_router(admin_state);
+
+    // Merge routers
+    let mut app = main_router.merge(admin_router);
 
     // Apply CORS if configured
     if let Some(ref cors_config) = config.server.cors {
