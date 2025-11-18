@@ -88,6 +88,7 @@ services:
     environment:
       RUST_LOG: info
       CONFIG_PATH: /app/config.yaml
+      PORT: "8080"
       DATABASE_URL: postgres://testuser:testpass@postgres:5432/testdb
       MYSQL_URL: mysql://testuser:testpass@mysql:3306/testdb
       MONGODB_URL: mongodb://testuser:testpass@mongodb:27017/testdb
