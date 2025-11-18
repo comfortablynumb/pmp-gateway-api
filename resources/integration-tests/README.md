@@ -88,7 +88,8 @@ The integration tests expect the following services to be running:
 - **MySQL** (port 3306)
 - **MongoDB** (port 27017)
 - **Redis** (port 6379)
-- **Mock Backend** (port 1080) - MockServer for backend simulation
+- **Mock Backend** (port 1080) - PMP Mock HTTP for backend simulation
+- **Mock Backend UI** (port 8081) - Dashboard for monitoring mock requests
 
 ### Configuration
 
